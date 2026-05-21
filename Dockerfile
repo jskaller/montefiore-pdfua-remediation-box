@@ -1,0 +1,88 @@
+FROM python:3.11-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV VERAPDF_HOME=/opt/verapdf
+ENV PATH="/opt/verapdf/bin:/opt/verapdf:${PATH}"
+
+# 1. Install core dependencies: Java 21, Node 24, qpdf, build tools, git
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openjdk-21-jre \
+    qpdf \
+    bash \
+    curl \
+    unzip \
+    git \
+    wget \
+    build-essential \
+    python3-dev \
+    ca-certificates \
+    gnupg \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+      | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_24.x nodistro main" \
+      > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Inject Headless Browser Fallback System-Wide
+RUN printf '#!/bin/sh\necho "\n[🔗 OPENCLAW AUTH LINK GENERATED]:\n\$1\n"\necho "\$1" > /app/workspace/jobs/auth_link.txt\nexit 0\n' > /usr/local/bin/xdg-open \
+    && chmod +x /usr/local/bin/xdg-open \
+    && ln -sf /usr/local/bin/xdg-open /usr/local/bin/open
+
+# 3. Download and Extract the Greenfield Installer Archive
+RUN mkdir -p /tmp/verapdf-install /opt/verapdf \
+    && wget -q https://downloads.verapdf.org/rel/verapdf-installer.zip -O /tmp/verapdf-install/verapdf-installer.zip \
+    && unzip -q /tmp/verapdf-install/verapdf-installer.zip -d /tmp/verapdf-install
+
+# 4. Generate Automated Configuration 
+RUN printf '<AutomatedInstallation langpack="eng">\n\
+  <com.izforge.izpack.panels.htmlhello.HTMLHelloPanel id="welcome"/>\n\
+  <com.izforge.izpack.panels.target.TargetPanel id="install_dir">\n\
+    <installpath>/opt/verapdf</installpath>\n\
+  </com.izforge.izpack.panels.target.TargetPanel>\n\
+  <com.izforge.izpack.panels.packs.PacksPanel id="sdk_pack_select"/>\n\
+  <com.izforge.izpack.panels.install.InstallPanel id="install"/>\n\
+  <com.izforge.izpack.panels.finish.FinishPanel id="finish"/>\n\
+</AutomatedInstallation>\n' > /tmp/verapdf-install/auto-install.xml
+
+# 5. Execute Unattended Installation
+RUN JAR_PATH=$(find /tmp/verapdf-install -name "verapdf-izpack-installer-*.jar" | head -n 1) \
+    && java -jar "$JAR_PATH" /tmp/verapdf-install/auto-install.xml
+
+# 6. Link the executable binary and verify basic engine operation
+RUN if [ -f "/opt/verapdf/verapdf" ]; then ln -sf /opt/verapdf/verapdf /usr/local/bin/verapdf; \
+    elif [ -f "/opt/verapdf/bin/verapdf" ]; then ln -sf /opt/verapdf/bin/verapdf /usr/local/bin/verapdf; \
+    fi \
+    && verapdf --version
+
+# 7. Fetch the Upstream Experimental WCAG Validation Profiles and Assert their Presence
+RUN git clone --depth 1 https://github.com/veraPDF/veraPDF-validation-profiles.git /opt/verapdf/wcag-profiles \
+    && find /opt/verapdf/wcag-profiles -iname '*wcag*' -print -quit | grep -i wcag
+
+# 8. Clean up compilation workspace cache
+RUN rm -rf /tmp/verapdf-install
+
+# 9. Install OpenClaw globally
+RUN npm install -g openclaw@latest
+
+WORKDIR /app
+
+# 10. Install Python prerequisites
+COPY requirements.txt ./
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+# 11. Bring in workspace pipelines
+COPY workspace/ ./workspace/
+RUN chmod +x /app/workspace/tools/scripts/*.sh 2>/dev/null || true
+
+# 12. Setup runtime automation orchestration entrypoint
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+EXPOSE 18789
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

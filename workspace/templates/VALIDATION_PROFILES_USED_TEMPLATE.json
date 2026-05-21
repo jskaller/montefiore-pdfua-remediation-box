@@ -1,0 +1,7 @@
+{
+  "pdfua_profile": {},
+  "wcag_profile": {},
+  "forbidden_profiles_for_target": [
+    "PDF_UA/WCAG-2-2-Machine-PDF20.xml for PDF/UA-1"
+  ]
+}

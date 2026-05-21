@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  remediator:
+    build: .
+    image: pdfua-remediator-v6:latest
+    container_name: pdfua-remediation-box
+    ports:
+      - "18789:18789"
+    volumes:
+      - ./openclaw_home:/root/.openclaw
+      - ~/Desktop/remediation_jobs:/app/workspace/jobs
+    stdin_open: true
+    tty: true
+    restart: unless-stopped

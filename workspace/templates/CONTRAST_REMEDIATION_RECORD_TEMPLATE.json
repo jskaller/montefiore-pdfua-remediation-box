@@ -1,0 +1,14 @@
+{
+  "page": null,
+  "text_sample": "",
+  "span_id": "",
+  "original_fg": "",
+  "background": "",
+  "original_ratio": null,
+  "threshold": 4.5,
+  "production_target": 7.0,
+  "new_color": "",
+  "final_ratio": null,
+  "direction": "",
+  "preservation_confirmed": []
+}

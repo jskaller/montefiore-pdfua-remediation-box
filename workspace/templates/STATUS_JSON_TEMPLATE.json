@@ -1,0 +1,24 @@
+{
+  "document": "",
+  "local_status": "",
+  "external_status": {
+    "axesCheck": "NOT RUN / PENDING",
+    "PAC": "NOT RUN / PENDING"
+  },
+  "gates": {
+    "qpdf": null,
+    "verapdf_pdfua": null,
+    "verapdf_wcag_machine": null,
+    "metadata_info_xmp_parity": null,
+    "contrast": null,
+    "table_semantics": null,
+    "native_text": null,
+    "visual_qa": null
+  },
+  "metadata": {
+    "info": {},
+    "xmp": {},
+    "catalog": {}
+  },
+  "profiles_used": []
+}

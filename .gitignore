@@ -1,0 +1,14 @@
+# Ignore Mac system noise
+.DS_Store
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# CRITICAL: Ignore your active, authenticated OpenClaw environment 
+openclaw_home/
+
+# Ignore any accidental local job outputs or test PDFs
+*.pdf
+auth_link.txt

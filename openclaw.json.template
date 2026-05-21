@@ -1,0 +1,44 @@
+{
+  "agents": {
+    "defaults": {
+      "workspace": "/app/workspace",
+      "model": {
+        "primary": "openai/gpt-5.5"
+      }
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "auth": {
+      "mode": "token",
+      "token": ""
+    },
+    "port": 18789,
+    "bind": "loopback"
+  },
+  "tools": {
+    "profile": "coding",
+    "web": {
+      "search": {
+        "provider": "duckduckgo",
+        "enabled": true
+      }
+    }
+  },
+  "plugins": {
+    "entries": {
+      "openai": {
+        "enabled": true
+      },
+      "codex": {
+        "enabled": true
+      },
+      "duckduckgo": {
+        "enabled": true
+      }
+    }
+  },
+  "auth": {
+    "profiles": {}
+  }
+}

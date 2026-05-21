@@ -1,0 +1,10 @@
+field,required_value,scope
+Author,Montefiore Einstein,Info and XMP
+Creator,Montefiore Einstein,Info and XMP
+Producer,Montefiore Einstein,Info and XMP
+Title,derived from visible document title,Info and XMP
+Subject,derived from document content,Info and XMP
+Description,derived from document content,XMP
+Keywords,content-specific,Info and XMP
+Lang,en-US unless otherwise clear,Catalog
+pdfuaid:part,1 for PDF/UA-1,XMP

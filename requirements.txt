@@ -1,0 +1,6 @@
+PyMuPDF
+pikepdf
+lxml
+Pillow
+fonttools
+openpyxl
