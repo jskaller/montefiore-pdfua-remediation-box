@@ -12,6 +12,8 @@ beginning any remediation job. All rules governing your decisions live in
 ---
 
 ## Container layout
+Note: scripts and smoke_test.py are at /app/, not /app/workspace/.
+The workspace/ directory contains only PDFs and job data.
 
 ```
 /app/
