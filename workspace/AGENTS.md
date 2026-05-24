@@ -12,8 +12,6 @@ beginning any remediation job. All rules governing your decisions live in
 ---
 
 ## Container layout
-Note: scripts and smoke_test.py are at /app/, not /app/workspace/.
-The workspace/ directory contains only PDFs and job data.
 
 ```
 /app/
@@ -129,6 +127,25 @@ Every remediation job must pass these gates in order:
 ---
 
 ## Hard rules
+
+### PDF/UA version — non-negotiable
+The target standard is **PDF/UA-1** unless the operator explicitly specifies
+otherwise in the job instruction. Never upgrade pdfuaid:part from 1 to 2
+on your own initiative. If you believe PDF/UA-2 would be more appropriate,
+say so and ask — do not act.
+
+fix_pdfua_identifier.py must always set:
+  - pdfuaid:part = 1
+  - pdfuaid:amd = 2005
+
+Never set pdfuaid:part = 2 or pdfuaid:rev = 2024 unless the operator
+explicitly instructs you to target PDF/UA-2 for this job.
+
+### Do not misrepresent failures
+If a validation gate fails, report it accurately. Do not describe a
+PDF/UA-1 failure as a "tooling limitation" when the failure was caused
+by incorrect metadata set during remediation. A tooling limitation means
+the tool cannot run. A compliance failure means the document does not comply.
 
 - Never process a PDF not explicitly named as the active source
 - Never hand off a document where veraPDF PDF/UA still fails
