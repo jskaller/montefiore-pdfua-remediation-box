@@ -64,7 +64,8 @@ Switch to VISION_MODEL before calling `visual_qa.py` or
 |------|---------|
 | Full remediation job | Load skill → follow gate sequence below |
 | Structural validation | `tools/audit/run_qpdf_check.sh` |
-| PDF/UA + WCAG validation | `tools/audit/run_verapdf_profiles.sh` |
+| PDF/UA-1 + WCAG validation | `tools/audit/run_verapdf_profiles.sh` (runs PDF/UA-1, WCAG-2-2, ISO-32000-1 only) |
+| PDF/UA-2 validation | `tools/audit/run_verapdf_profiles.sh --pdfua2` (only when operator explicitly requests PDF/UA-2) |
 | Metadata audit | `tools/audit/metadata_xmp_parity_audit.py` |
 | Font inventory | `tools/audit/font_inventory.py` → `tools/audit/font_geometry_matcher.py` |
 | Table audit | `tools/audit/table_semantics_audit.py` |
