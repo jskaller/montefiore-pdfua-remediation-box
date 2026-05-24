@@ -127,9 +127,12 @@ RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 
 # ── Application code ──────────────────────────────────────────────────────────
 
-COPY tools/    ./tools/
-COPY skills/   ./skills/
-COPY AGENTS.md ./AGENTS.md
+COPY tools/      ./tools/
+COPY skills/     ./skills/
+COPY AGENTS.md   ./AGENTS.md
+COPY SOUL.md     ./SOUL.md
+COPY IDENTITY.md ./IDENTITY.md
+COPY TOOLS.md    ./TOOLS.md
 COPY smoke_test.py .
 
 RUN find tools/ -name "*.sh" -exec chmod +x {} \;

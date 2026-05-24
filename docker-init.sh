@@ -2,7 +2,8 @@
 # docker-init.sh
 # Runs on every container start.
 # 1. Clones veraPDF validation profiles if not already present
-# 2. Copies AGENTS.md from code tree into workspace (overrides OpenClaw default)
+# 2. Copies workspace control files from code tree into workspace
+#    (overrides OpenClaw defaults which would otherwise lose our config)
 # 3. Executes the main command (openclaw gateway run --force)
 set -euo pipefail
 
@@ -24,15 +25,17 @@ else
     echo "[init] Validation profiles already present — skipping clone."
 fi
 
-# ── Copy AGENTS.md from code tree into workspace ──────────────────────────────
-# OpenClaw writes its own AGENTS.md template to workspace/ on first init.
-# We overwrite it with our remediation-specific gate sequence every start
-# to ensure the agent always has the correct instructions.
+# ── Copy workspace control files from code tree ───────────────────────────────
+# OpenClaw writes its own versions of these files to workspace/ on first init.
+# We overwrite them on every start to ensure our remediation config is always
+# current. Files live in /app/ (code tree) and are copied to /app/workspace/.
 
-if [ -f "/app/AGENTS.md" ]; then
-    cp /app/AGENTS.md /app/workspace/AGENTS.md
-    echo "[init] AGENTS.md copied to workspace."
-fi
+for f in AGENTS.md SOUL.md IDENTITY.md TOOLS.md; do
+    if [ -f "/app/${f}" ]; then
+        cp "/app/${f}" "/app/workspace/${f}"
+        echo "[init] Copied ${f} to workspace."
+    fi
+done
 
 # ── Execute main command ──────────────────────────────────────────────────────
 
