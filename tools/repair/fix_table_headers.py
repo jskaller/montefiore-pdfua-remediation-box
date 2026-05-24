@@ -66,10 +66,8 @@ for xref, s_type in walk_for_type(struct_root_xref, doc, {'TH'}):
     if not scope_present:
         attr_xref = doc.xref_get_key(xref, 'A')
         if attr_xref[0] == 'null':
-            new_attr_xref = doc.xref_append(
-                '<<\n/O /Table\n/Scope /Column\n>>'
-            )
-            doc.xref_set_key(xref, 'A', f'{new_attr_xref} 0 R')
+            # Create attribute dictionary directly (no xref_append)
+            doc.xref_set_key(xref, 'A', '<< /O /Table /Scope /Column >>')
         else:
             existing_attr_xref = int(attr_xref[1].split()[0])
             doc.xref_set_key(existing_attr_xref, 'Scope', '/Column')

@@ -74,10 +74,8 @@ for l_xref in walk_lists(struct_root_xref, doc):
                 break
 
         if attrs[0] == 'null':
-            new_attr_xref = doc.xref_append(
-                f'<<\n/O /List\n/ListNumbering /{list_type}\n>>'
-            )
-            doc.xref_set_key(l_xref, 'A', f'{new_attr_xref} 0 R')
+            # Create attribute dictionary as direct object (no need for xref_append)
+            doc.xref_set_key(l_xref, 'A', f'<< /O /List /ListNumbering /{list_type} >>')
         else:
             existing_xref = int(attrs[1].split()[0])
             doc.xref_set_key(existing_xref, 'ListNumbering', f'/{list_type}')
