@@ -42,15 +42,8 @@ chk('workspace/assets/validation_profiles exists',
 chk('SKILL.md present',
     any((root / 'skills').rglob('SKILL.md')),
     'SKILL.md missing from skills/ tree')
-chk('Dockerfile present',
-    (root.parent / 'Dockerfile').exists() or (root / 'Dockerfile').exists(),
-    'Dockerfile missing from repo root')
-chk('docker-compose.yml present',
-    (root.parent / 'docker-compose.yml').exists() or (root / 'docker-compose.yml').exists(),
-    'docker-compose.yml missing from repo root')
-chk('.env.example present',
-    (root.parent / '.env.example').exists() or (root / '.env.example').exists(),
-    'Copy .env.example to repo root')
+# Dockerfile, docker-compose.yml, .env.example live on the host —
+# not inside the container. Verified during build, not at runtime.
 chk('requirements.txt present',
     (root / 'requirements.txt').exists())
 
@@ -142,7 +135,7 @@ chk('git available',
 # ── veraPDF ───────────────────────────────────────────────────────────────────
 
 import os
-verapdf_bin = os.environ.get('VERAPDF_BIN', '/opt/verapdf/verapdf')
+verapdf_bin = os.environ.get('VERAPDF_BIN', '/opt/verapdf/arlington-pdf-model-checker')
 chk('veraPDF binary present',
     Path(verapdf_bin).exists(),
     f'veraPDF not found at {verapdf_bin} — check Dockerfile install step')
