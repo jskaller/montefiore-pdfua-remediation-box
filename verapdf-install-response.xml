@@ -1,0 +1,15 @@
+<AutomatedInstallation langpack="eng">
+  <com.izforge.izpack.panels.hello.HelloPanel id="0"/>
+  <com.izforge.izpack.panels.licence.LicencePanel id="1"/>
+  <com.izforge.izpack.panels.target.TargetPanel id="2">
+    <installpath>/opt/verapdf</installpath>
+  </com.izforge.izpack.panels.target.TargetPanel>
+  <com.izforge.izpack.panels.packs.PacksPanel id="3">
+    <pack name="veraPDF GUI" selected="false"/>
+    <pack name="veraPDF Mac and *nix Scripts" selected="true"/>
+    <pack name="veraPDF Documentation" selected="true"/>
+    <pack name="veraPDF Experimental Features" selected="true"/>
+  </com.izforge.izpack.panels.packs.PacksPanel>
+  <com.izforge.izpack.panels.install.InstallPanel id="4"/>
+  <com.izforge.izpack.panels.finish.FinishPanel id="5"/>
+</AutomatedInstallation>
