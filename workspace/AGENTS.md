@@ -95,6 +95,11 @@ Every remediation job must pass these gates in order:
 ### Audit gates
 1. `run_verapdf_profiles.sh` — PDF/UA-1 + WCAG-2-2-Machine (hard stop on FAIL — repair then re-run)
 2. `metadata_xmp_parity_audit.py` — metadata parity (hard stop on FAIL)
+   - This gate is MANDATORY on every job, every time, without exception
+   - Run it AFTER all repairs are complete and BEFORE packaging
+   - If it fails, run `fix_metadata_xmp_parity.py` then re-run the audit to confirm PASS
+   - Do not proceed to packaging until this audit returns PASS
+   - Do not assume metadata is correct because you set it earlier — always verify
 3. `preservation_audit.py` — native text preserved (hard stop on FAIL)
 4. `table_semantics_audit.py` — struct tree + visual table cross-check
 5. `contrast_audit.py` — WCAG 1.4.3 contrast
@@ -129,17 +134,21 @@ Every remediation job must pass these gates in order:
 ## Hard rules
 
 ### PDF/UA version — non-negotiable
-The target standard is **PDF/UA-1** unless the operator explicitly specifies
-otherwise in the job instruction. Never upgrade pdfuaid:part from 1 to 2
-on your own initiative. If you believe PDF/UA-2 would be more appropriate,
-say so and ask — do not act.
+The target standard is **PDF/UA-1** unless the operator explicitly says
+"target PDF/UA-2" in the job instruction. This is not a suggestion.
 
 fix_pdfua_identifier.py must always set:
   - pdfuaid:part = 1
   - pdfuaid:amd = 2005
 
-Never set pdfuaid:part = 2 or pdfuaid:rev = 2024 unless the operator
-explicitly instructs you to target PDF/UA-2 for this job.
+Never set pdfuaid:part = 2 or pdfuaid:rev = 2024 under any circumstances
+without explicit operator instruction.
+
+When run_verapdf_profiles.sh reports PDF/UA-2 FAIL on a PDF/UA-1 targeted
+document, this is EXPECTED and CORRECT — do not mention it as an issue,
+do not suggest fixing it, do not offer to update pdfuaid:part to 2.
+Simply report: "PDF/UA-2: FAIL (expected — this document targets PDF/UA-1)"
+and move on. The PDF/UA-2 profile runs for informational purposes only.
 
 ### Do not misrepresent failures
 If a validation gate fails, report it accurately. Do not describe a

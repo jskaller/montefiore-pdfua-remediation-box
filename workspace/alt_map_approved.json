@@ -1,0 +1,13 @@
+{
+  "reviewer": "Josh",
+  "reviewed_at": "2026-05-24T21:58:28.336Z",
+  "action": "accepted",
+  "figures": {
+    "0": {
+      "flagged": false,
+      "alt_text": "The image shows a table with two columns and three rows, titled \"Options\" and \"Recommendation.\" The table appears to be a decision-making tool for healthcare professionals, providing guidance on selecting the appropriate option based on specific criteria. The table is part of a larger document, likely a healthcare policy or procedure manual, and is used to facilitate informed decision-making in clinical settings.",
+      "decorative": false,
+      "instruction": null
+    }
+  }
+}
