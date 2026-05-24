@@ -8,32 +8,33 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
 
+# ── Enable universe and multiverse repos ─────────────────────────────────────
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    && add-apt-repository universe \
+    && add-apt-repository multiverse \
+    && rm -rf /var/lib/apt/lists/*
+
 # ── System dependencies ───────────────────────────────────────────────────────
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Java runtime for veraPDF
     openjdk-17-jre-headless \
-    # PDF structural validation and repair
     qpdf \
-    # OCR engine
     tesseract-ocr \
     tesseract-ocr-eng \
     tesseract-ocr-spa \
-    # Required by ocrmypdf for PDF/A output and image processing
     ghostscript \
-    # Build/fetch utilities
     wget \
     unzip \
     git \
+    curl \
     ca-certificates \
-    # Python
     python3 \
     python3-pip \
     python3-dev \
-    # Required by some Python wheel builds
     gcc \
     g++ \
-    # Font rendering
     fontconfig \
     && rm -rf /var/lib/apt/lists/*
 
@@ -41,10 +42,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
-    fonts-crosextra-arimo \
+    fonts-croscore \
     fonts-crosextra-carlito \
     fonts-crosextra-caladea \
-    fonts-crosextra-tinos \
     fonts-urw-base35 \
     fonts-texgyre \
     fonts-noto-core \
@@ -66,22 +66,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-ibm-plex \
     fonts-inter \
     fonts-atkinson-hyperlegible-ttf \
-    fonts-pt-sans \
-    fonts-pt-serif \
-    fonts-pt-mono \
+    fonts-paratype \
     fonts-stix \
     fonts-sil-charis \
     fonts-sil-andika \
     fonts-sil-scheherazade \
-    fonts-gentium-plus \
+    fonts-sil-gentiumplus \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Font packages — Tier 2: extended remediation coverage ────────────────────
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    fonts-linux-libertine \
+    fonts-linuxlibertine \
     fonts-cantarell \
-    fonts-droid \
+    fonts-droid-fallback \
     fonts-noto-extra \
     fonts-symbola \
     fonts-opensymbol \
@@ -94,7 +92,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ── veraPDF 1.30.1 Arlington ──────────────────────────────────────────────────
 
 ENV VERAPDF_VERSION=1.30.1
-ENV VERAPDF_BIN=/opt/verapdf/verapdf
+ENV VERAPDF_BIN=/opt/verapdf/arlington-pdf-model-checker
 
 COPY verapdf-install-response.xml /tmp/verapdf-install-response.xml
 
@@ -103,12 +101,22 @@ RUN wget -q \
     -O /tmp/verapdf-installer.zip \
     && unzip -q /tmp/verapdf-installer.zip -d /tmp/verapdf-installer \
     && java -Djava.awt.headless=true \
-            -jar /tmp/verapdf-installer/verapdf-arlington-${VERAPDF_VERSION}-installer.jar \
+            -jar /tmp/verapdf-installer/verapdf-arlington-${VERAPDF_VERSION}/verapdf-izpack-installer-${VERAPDF_VERSION}.jar \
             /tmp/verapdf-install-response.xml \
     && rm -rf /tmp/verapdf-installer.zip \
               /tmp/verapdf-installer \
               /tmp/verapdf-install-response.xml \
-    && /opt/verapdf/verapdf --version
+    && /opt/verapdf/arlington-pdf-model-checker --version
+
+# ── Node.js 24 + OpenClaw ────────────────────────────────────────────────────
+# OpenClaw requires Node.js 22.14+ (24 recommended)
+
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/* \
+    && node --version \
+    && npm install -g openclaw@latest \
+    && openclaw --version
 
 # ── Python dependencies ───────────────────────────────────────────────────────
 
@@ -125,6 +133,11 @@ COPY smoke_test.py .
 
 RUN find tools/ -name "*.sh" -exec chmod +x {} \;
 
+# ── OpenClaw configuration ───────────────────────────────────────────────────
+
+RUN mkdir -p /root/.openclaw
+COPY openclaw.json /root/.openclaw/openclaw.json
+
 # ── Init script ───────────────────────────────────────────────────────────────
 
 COPY docker-init.sh /usr/local/bin/docker-init.sh
@@ -132,7 +145,7 @@ RUN chmod +x /usr/local/bin/docker-init.sh
 
 # ── Environment variables ─────────────────────────────────────────────────────
 
-ENV VERAPDF_BIN=/opt/verapdf/verapdf
+ENV VERAPDF_BIN=/opt/verapdf/arlington-pdf-model-checker
 ENV QPDF_BIN=/usr/bin/qpdf
 ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 ENV PYTHONUNBUFFERED=1
@@ -152,4 +165,4 @@ VOLUME /app/workspace
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 
 ENTRYPOINT ["/usr/local/bin/docker-init.sh"]
-CMD ["python3", "smoke_test.py"]
+CMD ["openclaw", "gateway", "run", "--force"]
