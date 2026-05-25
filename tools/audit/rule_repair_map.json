@@ -1,20 +1,33 @@
 {
   "_meta": {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "standard": "PDF/UA-1 (ISO 14289-1)",
-    "purpose": "Maps veraPDF rule IDs to repair scripts. Enables the agent to route directly to the correct fix without reasoning from scratch. Keys match the specification/clause format output by parse_verapdf_summary.py.",
-    "key_format": "{specification}/{clause}  e.g. PDF/UA-1/7.18.6.3",
+    "purpose": "Maps veraPDF rule IDs to repair scripts. Enables the agent to route directly to the correct fix without reasoning from scratch. Keys match the normalised specification/clause format output by parse_verapdf_summary.py.",
+    "key_format": "{normalised_spec}/{clause}  e.g. PDF/UA-1/7.18.6.3",
+    "normalisation": "veraPDF Arlington profiles output 'ISO 14289-1:2014' as the specification string. parse_verapdf_summary.py normalises this to 'PDF/UA-1' so keys here always use the PDF/UA-1 prefix regardless of how veraPDF labels it.",
     "confidence_levels": {
       "CONFIRMED": "Verified on at least one real Montefiore job — outcome was PASS",
       "EXPECTED":  "Correct per ISO 14289-1 spec + veraPDF rule definitions — not yet confirmed on a Montefiore job",
       "MANUAL":    "Cannot be auto-repaired — requires human intervention or Acrobat Pro"
     },
     "repair_order_note": "repair_order matches the mandatory sequence in AGENTS.md. Always apply repairs in ascending order. fix_table_headers.py (order 10) MUST be last — no saves may occur after it.",
-    "confirmed_jobs": 1,
+    "confirmed_jobs": 2,
     "last_updated": "2026-05-25"
   },
 
   "rules": {
+
+    "PDF/UA-1/5": {
+      "clause": "5",
+      "description": "Document does not conform to PDF/UA-1 — missing or incorrect pdfuaid identifier",
+      "repair_script": "tools/repair/fix_pdfua_identifier.py",
+      "repair_order": 1,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 2,
+      "notes": "Top-level conformance clause. Always fixed by setting pdfuaid:part=1, pdfuaid:amd=2005. Run first."
+    },
 
     "PDF/UA-1/6.2": {
       "clause": "6.2",
@@ -24,7 +37,7 @@
       "run_last": false,
       "args_pattern": "<input.pdf> <output.pdf>",
       "confidence": "CONFIRMED",
-      "confirmed_jobs": 1,
+      "confirmed_jobs": 2,
       "notes": "Almost always needed on unremediated PDFs. Sets pdfuaid:part=1 and pdfuaid:amd=2005. Never set part=2."
     },
 
@@ -50,6 +63,18 @@
       "confidence": "CONFIRMED",
       "confirmed_jobs": 1,
       "notes": "Sets Author, Creator, Producer to 'Montefiore Einstein'. Run metadata_xmp_parity_audit.py after to verify. Run again after ALL repairs to confirm no subsequent script corrupted metadata."
+    },
+
+    "PDF/UA-1/7.1": {
+      "clause": "7.1",
+      "description": "Document is not marked as tagged or missing required catalog entries (Marked, ViewerPreferences, DisplayDocTitle, Lang)",
+      "repair_script": "tools/repair/fix_metadata_xmp_parity.py",
+      "repair_order": 2,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf> --title \"...\" --subject \"...\" --keywords \"...\"",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 2,
+      "notes": "Covers multiple catalog-level requirements. fix_metadata_xmp_parity.py sets DisplayDocTitle, Lang, and XMP fields. fix_pdfua_identifier.py sets Marked=true. Run both for 7.1 failures."
     },
 
     "PDF/UA-1/7.1-1": {
@@ -98,6 +123,18 @@
       "confidence": "MANUAL",
       "confirmed_jobs": 0,
       "notes": "Cannot be auto-repaired. Requires Acrobat Pro or CommonLook to retag untagged content. Set result to FAIL and escalate."
+    },
+
+    "PDF/UA-1/7.3": {
+      "clause": "7.3",
+      "description": "Figure element missing Alt attribute or has placeholder alt text",
+      "repair_script": "tools/repair/fix_figure_alt_text.py",
+      "repair_order": 6,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf> --alt-map $JOB/reports/alt_map_approved.json",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 2,
+      "notes": "Check for alt_map_approved.json first (Branch A). If exists, apply directly. If not, run generate_alt_text_drafts.py then pause for human review (Branch B). Never apply placeholder text to production output."
     },
 
     "PDF/UA-1/7.3-1": {
@@ -196,6 +233,18 @@
       "notes": "Check font_inventory.py + font_geometry_matcher.py first for geometry match. Font replacement is last resort. If no geometry match available, escalate — cannot auto-repair."
     },
 
+    "PDF/UA-1/7.21.4.2": {
+      "clause": "7.21.4.2",
+      "description": "CIDSet entry in font descriptor is incomplete for subset font",
+      "repair_script": "tools/repair/fix_cidset.py",
+      "repair_order": 4,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 2,
+      "notes": "Arlington profile rule ID. Font descriptor only — no struct tree impact. Safe to run early."
+    },
+
     "PDF/UA-1/7.21.4.2-1": {
       "clause": "7.21.4.2-1",
       "description": "CIDSet entry in font descriptor is incomplete for subset font",
@@ -204,8 +253,8 @@
       "run_last": false,
       "args_pattern": "<input.pdf> <output.pdf>",
       "confidence": "CONFIRMED",
-      "confirmed_jobs": 1,
-      "notes": "Alias for 6.7.2 in some veraPDF profile versions. Same fix applies."
+      "confirmed_jobs": 2,
+      "notes": "Older veraPDF profile variant of 7.21.4.2. Same fix applies."
     },
 
     "PDF/UA-1/7.21.6-1": {

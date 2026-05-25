@@ -82,6 +82,7 @@ Switch to VISION_MODEL before calling `visual_qa.py` or
 | Package output | `tools/packaging/package_deliverables.py` |
 | Assemble STATUS.json | `tools/packaging/status_json_writer.py` |
 | Checksums | `tools/packaging/checksums.py` |
+| Knowledge update | `tools/audit/post_job_indexer.py` — run after packaging to update rule_repair_map.json |
 | Cleanup jobs | `tools/packaging/cleanup_job.py` |
 
 ---
@@ -136,6 +137,14 @@ Every remediation job must pass these gates in order:
 
 ### Audit gates
 1. `run_verapdf_profiles.sh` — PDF/UA-1 + WCAG-2-2-Machine baseline
+
+   Save pre-repair XML with explicit names — these are required for repair plan lookup:
+   ```bash
+   bash tools/audit/run_verapdf_profiles.sh "$JOB/repair/pass0_source.pdf" "$JOB/audit"
+   # Immediately rename to pre-repair filenames before any repairs run:
+   cp "$JOB/audit/verapdf_pdfua_ua1.xml"       "$JOB/audit/verapdf_pre_pdfua1.xml"
+   cp "$JOB/audit/verapdf_wcag_2_2_machine.xml" "$JOB/audit/verapdf_pre_wcag.xml"
+   ```
    (hard stop on FAIL — repair then re-run until PASS)
 
 2. `metadata_xmp_parity_audit.py` — metadata parity
@@ -157,9 +166,11 @@ Every remediation job must pass these gates in order:
 After the baseline veraPDF audit, always run:
 
 ```bash
-# Parse veraPDF XML into structured failures
+# Parse pre-repair veraPDF XML into structured failures
 python3 tools/audit/parse_verapdf_summary.py \
-  $JOB/audit/verapdf_pre*.xml > $JOB/audit/failures.json
+  $JOB/audit/verapdf_pre_pdfua1.xml \
+  $JOB/audit/verapdf_pre_wcag.xml \
+  > $JOB/audit/failures.json
 
 # Look up the ordered repair plan
 python3 tools/audit/lookup_repair_plan.py \
@@ -249,6 +260,18 @@ or multiple saves.
 8. `status_json_writer.py` — assemble STATUS.json
 9. `checksums.py` — SHA256 verification
 10. `package_deliverables.py` — promote final PDF and audit report to output/
+11. `post_job_indexer.py` — update rule_repair_map.json with confirmed outcomes
+
+```bash
+python3 tools/audit/post_job_indexer.py \
+  "$JOB" \
+  --map tools/audit/rule_repair_map.json
+```
+
+This step is mandatory. It closes the learning loop — confirmed rule/fix
+pairs increment their confidence, deviations are logged, and new rule IDs
+are added as EXPECTED for future jobs. Without this step the repair plan
+lookup stays static and never improves.
 
 ---
 
@@ -263,44 +286,55 @@ jobs/{TICKET}_{basename}/reports/alt_map_approved.json
 Never read from or write to `workspace/alt_map_approved.json` — that
 location is not used. Never share an approved map between jobs.
 
+### Checking which branch to follow
+
+**Run this check first, before any other alt text work:**
+
+```bash
+test -f "$JOB/reports/alt_map_approved.json" && echo "BRANCH_A" || echo "BRANCH_B"
+```
+
+If output is `BRANCH_A` → follow Branch A only. Do not generate drafts.
+If output is `BRANCH_B` → follow Branch B only.
+
 ### Branch A — approved map already exists
 
-If `jobs/{job}/reports/alt_map_approved.json` exists at the start of
-the alt text repair step, apply it directly without generating drafts
-or pausing for review:
-
-```
-fix_figure_alt_text.py <input.pdf> <output.pdf> \
-  --alt-map jobs/{job}/reports/alt_map_approved.json
+```bash
+python3 tools/repair/fix_figure_alt_text.py \
+  <input.pdf> <output.pdf> \
+  --alt-map "$JOB/reports/alt_map_approved.json"
 ```
 
 Expected result: `FIXED` or `ALREADY_CORRECT`. If result is `PARTIAL`
 (some figures not in map), stop and report which figures were skipped —
 do not continue until resolved.
 
+Do NOT run generate_alt_text_drafts.py or generate_alt_text_review_report.py
+in Branch A. The map is already approved — draft generation is wasted work.
+
 ### Branch B — no approved map exists
 
-If `jobs/{job}/reports/alt_map_approved.json` does not exist:
-
 ```
-Step 1: generate_alt_text_drafts.py <input.pdf> \
-          jobs/{job}/reports/alt_text_drafts.json
+Step 1: python3 tools/repair/generate_alt_text_drafts.py \
+          <input.pdf> \
+          "$JOB/reports/alt_text_drafts.json"
         Produces vision-model draft alt text for all figures.
 
-Step 2: generate_alt_text_review_report.py \
-          jobs/{job}/reports/alt_text_drafts.json \
-          jobs/{job}/reports/alt_text_review.html
+Step 2: python3 tools/repair/generate_alt_text_review_report.py \
+          "$JOB/reports/alt_text_drafts.json" \
+          "$JOB/reports/alt_text_review.html"
         Produces HTML review report for human inspection.
 
 Step 3: [PAUSE — human review required]
         Display the path to alt_text_review.html and alt_text_drafts.json.
         Stop and wait for the operator to confirm approval.
         The operator saves their approved map to:
-          jobs/{job}/reports/alt_map_approved.json
+          $JOB/reports/alt_map_approved.json
 
 Step 4: [RESUME on operator instruction]
-        fix_figure_alt_text.py <input.pdf> <output.pdf> \
-          --alt-map jobs/{job}/reports/alt_map_approved.json
+        python3 tools/repair/fix_figure_alt_text.py \
+          <input.pdf> <output.pdf> \
+          --alt-map "$JOB/reports/alt_map_approved.json"
         Applies approved descriptions. Figures marked decorative
         receive empty Alt and are artifacted.
 ```
@@ -325,7 +359,47 @@ Step 4: [RESUME on operator instruction]
 
 ---
 
-## Hard rules
+## Communication protocol — structured output only
+
+Between steps, report only structured output. Do not narrate actions,
+summarize completed steps, or explain what you are about to do.
+
+**Between steps — use this format only:**
+```
+STEP: <step_name>
+RESULT: <PASS|FAIL|FIXED|SKIPPED|NEEDS_REVIEW>
+NOTE: <only if result is unexpected or requires operator attention>
+```
+
+**Reserve prose for:**
+- Exceptions and errors requiring operator decision
+- The final job summary (after packaging is complete)
+- The alt text review pause (Branch B only)
+
+Do not write sentences like "I have successfully completed..." or "Now I will
+proceed to...". Execute the next step immediately after reporting the result
+of the current one.
+
+---
+
+## Repair execution — trust the plan, minimize veraPDF calls
+
+veraPDF is slow (Java startup + full validation on every call). Minimize runs:
+
+- **Pre-repair:** run once, save XML, generate repair plan. That's it.
+- **Post-repair:** run once after ALL repairs are complete.
+- **Mid-repair veraPDF:** only if a repair step returns an unexpected result
+  (script error, PARTIAL, or result that contradicts the plan). Do not run
+  veraPDF after every individual repair script — the repair plan already
+  encodes the expected outcome.
+
+If `lookup_repair_plan.py` returns a `PLAN_READY` result, execute all
+`repair_steps` in order without re-consulting AGENTS.md for each one.
+The plan is already derived from AGENTS.md rules — re-reading them per step
+is redundant and expensive. Only consult AGENTS.md when the plan is
+insufficient or a step fails unexpectedly.
+
+---
 
 ### PDF/UA version — non-negotiable
 The target standard is **PDF/UA-1** unless the operator explicitly says
@@ -353,6 +427,7 @@ the tool cannot run. A compliance failure means the document does not comply.
 - Never process a PDF not explicitly named as the active source
 - Never hand off a document where veraPDF PDF/UA still fails
 - Never modify files in `workspace/input/` — source PDFs are read-only
+- **Never modify, overwrite, or write to any file under `/app/tools/` or `/app/skills/`** — these are read-only executables. Run them, never edit them. If a script fails, report the error — do not attempt to patch it inline.
 - Never output intermediate files to `workspace/output/`
 - Always run `preservation_audit.py` after any repair
 - Always run `metadata_xmp_parity_audit.py` after final save
@@ -361,6 +436,7 @@ the tool cannot run. A compliance failure means the document does not comply.
 - Alt text placeholders must be replaced before Gate 9 passes
 - pikepdf: only when veraPDF identifies a failure PyMuPDF cannot fix
 - Visual QA (VISION_MODEL) required after any operation that changes rendered output
+- **Always save pre-repair veraPDF XML** to `$JOB/audit/verapdf_pre_pdfua1.xml` and `$JOB/audit/verapdf_pre_wcag.xml` before any repairs. These are required for `parse_verapdf_summary.py` and `lookup_repair_plan.py`. Do not overwrite them with post-repair results — use distinct filenames (e.g. `verapdf_post_pdfua1.xml`) for subsequent runs.
 
 ## Dependency failures
 
