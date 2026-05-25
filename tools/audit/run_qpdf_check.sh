@@ -45,15 +45,31 @@ ERRORS=""
 "$QPDF" --check "$PDF" > "$LOG" 2>&1
 QPDF_EXIT=$?
 
-if [ "$QPDF_EXIT" -eq 2 ]; then
-    # Warnings only — linearization hints, hint table mismatches, etc.
-    # File is structurally sound. Do not hard-stop.
+# qpdf exit codes are not reliable across versions — some builds return 3
+# for warnings-only runs ("operation succeeded with warnings").
+# Always check the log content to determine actual severity.
+LOG_CONTENT=$(cat "$LOG")
+
+if echo "$LOG_CONTENT" | grep -qi "operation succeeded with warnings"; then
+    # Warnings only — cosmetic, file is structurally sound
     RESULT="PASS"
-    WARNINGS=$(head -40 "$LOG" | sed 's/"/\\"/g' | tr '\n' ' ')
+    WARNINGS=$(echo "$LOG_CONTENT" | head -40 | sed 's/"/\\"/g' | tr '\n' ' ')
+elif [ "$QPDF_EXIT" -eq 0 ]; then
+    RESULT="PASS"
+elif [ "$QPDF_EXIT" -eq 2 ]; then
+    # Warnings only per exit code
+    RESULT="PASS"
+    WARNINGS=$(echo "$LOG_CONTENT" | head -40 | sed 's/"/\\"/g' | tr '\n' ' ')
 elif [ "$QPDF_EXIT" -ge 3 ]; then
-    # Actual structural errors — corrupt xref, unreadable objects, etc.
-    RESULT="FAIL"
-    ERRORS=$(head -40 "$LOG" | sed 's/"/\\"/g' | tr '\n' ' ')
+    # Check if log indicates actual structural errors vs warnings
+    if echo "$LOG_CONTENT" | grep -qiE "(error|corrupt|invalid|failed|cannot|unable)"; then
+        RESULT="FAIL"
+        ERRORS=$(echo "$LOG_CONTENT" | head -40 | sed 's/"/\\"/g' | tr '\n' ' ')
+    else
+        # Exit code suggests error but log shows no structural issues — treat as warnings
+        RESULT="PASS"
+        WARNINGS=$(echo "$LOG_CONTENT" | head -40 | sed 's/"/\\"/g' | tr '\n' ' ')
+    fi
 fi
 
 if [ "$LINEARIZE" -eq 1 ] && [ "$RESULT" = "PASS" ]; then

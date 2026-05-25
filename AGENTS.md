@@ -11,6 +11,32 @@ beginning any remediation job. All rules governing your decisions live in
 
 ---
 
+## Communication protocol — JSON only between steps
+
+Between steps, output JSON only. No prose, no narration, no explanation.
+
+**Between steps — use this exact format:**
+```json
+{"step": "<step_name>", "result": "<PASS|FAIL|FIXED|SKIPPED|NEEDS_REVIEW>", "note": "<only if unexpected>"}
+```
+
+Omit `note` entirely if the result is the expected outcome.
+
+**Reserve prose for:**
+- Hard stops (gate FAIL, manual escalation) — explain what failed, why,
+  and exactly what the operator needs to do to resolve it
+- The alt text review pause (Branch B only) — tell operator where review files are
+- Errors requiring operator decision that cannot be expressed in JSON
+- The final job summary after packaging is complete
+
+Do not write "I have successfully completed..." or "Now I will proceed to...".
+Output the JSON result and immediately execute the next step.
+
+**Final job summary** — prose permitted. Include gate results table,
+deliverable paths, and any caveats.
+
+---
+
 ## Container layout
 
 ```
@@ -356,29 +382,6 @@ Step 4: [RESUME on operator instruction]
 | PASS | `output/{TICKET}_remediated/{name}_remediated.pdf` + `{name}_AUDIT_REPORT.md` | Upload both |
 | REVIEW_REQUIRED | `output/{TICKET}_remediated/review/{name}_review.pdf` + `{name}_AUDIT_REPORT.md` | Human inspects before upload |
 | FAIL | `output/{TICKET}_remediated/failed/{name}_failed.pdf` + `{name}_AUDIT_REPORT.md` | Upload report only, escalate |
-
----
-
-## Communication protocol — structured output only
-
-Between steps, report only structured output. Do not narrate actions,
-summarize completed steps, or explain what you are about to do.
-
-**Between steps — use this format only:**
-```
-STEP: <step_name>
-RESULT: <PASS|FAIL|FIXED|SKIPPED|NEEDS_REVIEW>
-NOTE: <only if result is unexpected or requires operator attention>
-```
-
-**Reserve prose for:**
-- Exceptions and errors requiring operator decision
-- The final job summary (after packaging is complete)
-- The alt text review pause (Branch B only)
-
-Do not write sentences like "I have successfully completed..." or "Now I will
-proceed to...". Execute the next step immediately after reporting the result
-of the current one.
 
 ---
 

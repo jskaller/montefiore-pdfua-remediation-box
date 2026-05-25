@@ -77,6 +77,18 @@
       "notes": "Covers multiple catalog-level requirements. fix_metadata_xmp_parity.py sets DisplayDocTitle, Lang, and XMP fields. fix_pdfua_identifier.py sets Marked=true. Run both for 7.1 failures."
     },
 
+    "PDF/UA-1/7.1": {
+      "clause": "7.1",
+      "description": "Document-level conformance failures — covers tagged PDF, viewer preferences, language, and catalog requirements",
+      "repair_script": "tools/repair/fix_metadata_xmp_parity.py",
+      "repair_order": 2,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf> --title \"...\" --subject \"...\" --keywords \"...\"",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 2,
+      "notes": "Arlington profile reports all 7.1.x failures under the parent clause 7.1. Run both fix_pdfua_identifier.py (repair_order 1) and fix_metadata_xmp_parity.py (repair_order 2) when this rule fires — they together cover Marked, DisplayDocTitle, Lang, and XMP fields. Always pass --title, --subject, --keywords derived from document content."
+    },
+
     "PDF/UA-1/7.1-1": {
       "clause": "7.1-1",
       "description": "Document is not marked as tagged (Marked entry missing from Catalog)",
