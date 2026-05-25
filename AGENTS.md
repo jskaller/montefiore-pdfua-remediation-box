@@ -72,13 +72,13 @@ Switch to VISION_MODEL before calling `visual_qa.py` or
 | Contrast audit | `tools/audit/contrast_audit.py` |
 | OCR pre-flight | `tools/audit/detect_image_only_pages.py` |
 | OCR repair | `ocrmypdf --skip-text -l <lang>` (see OCR_REMEDIATION_RULE) |
-| Alt text pipeline | `tools/repair/fix_figure_alt_text.py` → `generate_alt_text_drafts.py` → `generate_alt_text_review_report.py` |
+| Alt text pipeline | `tools/repair/generate_alt_text_drafts.py` → `tools/repair/generate_alt_text_review_report.py` → [human review] → `tools/repair/fix_figure_alt_text.py --alt-map` |
 | Table repair | `tools/repair/fix_table_headers.py` |
 | Metadata repair | `tools/repair/fix_metadata_xmp_parity.py` |
 | Contrast repair | `tools/repair/fix_contrast_color_runs.py` |
 | Preservation QA | `tools/qa/preservation_audit.py` |
 | Visual QA | `tools/qa/visual_qa.py` + `tools/qa/render_compare.py` |
-| Package output | `tools/packaging/package_scaffold.py` → `tools/packaging/package_deliverables.py` |
+| Package output | `tools/packaging/package_deliverables.py` |
 | Assemble STATUS.json | `tools/packaging/status_json_writer.py` |
 | Checksums | `tools/packaging/checksums.py` |
 | Cleanup jobs | `tools/packaging/cleanup_job.py` |
@@ -105,10 +105,25 @@ output/{TICKET}_remediated/   ← final deliverables ONLY
   failed/                     ← only if FAIL
 ```
 
+Invoke scaffold as:
+
+```bash
+python3 tools/packaging/package_scaffold.py \
+  /app/workspace \
+  <TICKET-ID> \
+  <source-pdf-basename>
+```
+
+Record the `job_dir` and `output_dir` values from the JSON output.
+Use them for every subsequent path reference in the job.
+
 **Never write to output/ during remediation.** Output gets exactly two
 files at the end: the remediated PDF and the audit report.
 **Never scatter JSON files at the output/ root level.**
 **Never create directories outside jobs/ and output/.**
+**Never write to or modify files in input/ — source PDFs are read-only.**
+
+---
 
 ## Gate sequence
 
@@ -119,13 +134,19 @@ Every remediation job must pass these gates in order:
 0b. `run_qpdf_check.sh` — structural integrity (hard stop on FAIL)
 
 ### Audit gates
-1. `run_verapdf_profiles.sh` — PDF/UA-1 + WCAG-2-2-Machine (hard stop on FAIL — repair then re-run)
-2. `metadata_xmp_parity_audit.py` — metadata parity (hard stop on FAIL)
-   - This gate is MANDATORY on every job, every time, without exception
-   - Run it AFTER all repairs are complete and BEFORE packaging
-   - If it fails, run `fix_metadata_xmp_parity.py` then re-run the audit to confirm PASS
-   - Do not proceed to packaging until this audit returns PASS
-   - Do not assume metadata is correct because you set it earlier — always verify
+1. `run_verapdf_profiles.sh` — PDF/UA-1 + WCAG-2-2-Machine baseline
+   (hard stop on FAIL — repair then re-run until PASS)
+
+2. `metadata_xmp_parity_audit.py` — metadata parity
+   - Run at Gate 2 to detect issues; repair with `fix_metadata_xmp_parity.py`
+     if it fails, then re-run to confirm PASS before continuing.
+   - Run again after ALL repairs are complete and before packaging to
+     verify no subsequent repair step has corrupted metadata.
+   - Both passes must return PASS. Do not proceed to packaging until the
+     post-repair pass returns PASS.
+   - Do not assume metadata is correct because you set it earlier — always
+     verify with the audit script.
+
 3. `preservation_audit.py` — native text preserved (hard stop on FAIL)
 4. `table_semantics_audit.py` — struct tree + visual table cross-check
 5. `contrast_audit.py` — WCAG 1.4.3 contrast
@@ -140,7 +161,8 @@ Apply repairs in this order:
 3. `fix_notdef_glyphs.py` — font-level, no struct tree impact
 4. `fix_cidset.py` — font descriptor only, no struct tree impact
 5. `fix_contrast_color_runs.py` — content streams, no struct tree impact
-6. `fix_figure_alt_text.py` — struct tree Alt attributes
+6. `fix_figure_alt_text.py --alt-map` — struct tree Alt attributes
+   (requires human-approved alt_map_approved.json — see alt text pipeline)
 7. `fix_link_annotation_descriptions.py` — annotations
 8. `fix_list_numbering.py` — struct tree L attributes
 9. `fix_parent_tree_mcids.py` — struct tree ParentTree (if needed)
@@ -149,8 +171,9 @@ Apply repairs in this order:
     subsequent saves or pikepdf operations. Running this last ensures
     the xrefs are stable when Scope is written.
 
-After ALL repairs are complete, run QA gates (render_compare, visual_qa).
-Never run fix_table_headers.py before pikepdf operations or multiple saves.
+After ALL repairs are complete, run the post-repair metadata audit,
+then QA gates. Never run fix_table_headers.py before pikepdf operations
+or multiple saves.
 
 ### QA gates (after all repairs)
 6. `render_compare.py` — visual diff source vs output
@@ -159,7 +182,35 @@ Never run fix_table_headers.py before pikepdf operations or multiple saves.
 ### Packaging
 8. `status_json_writer.py` — assemble STATUS.json
 9. `checksums.py` — SHA256 verification
-10. `package_scaffold.py` + `package_deliverables.py` — promote to output/
+10. `package_deliverables.py` — promote final PDF and audit report to output/
+
+---
+
+## Alt text pipeline — human-in-the-loop
+
+Alt text requires a mandatory human review gate. Never skip it.
+
+```
+Step 1: generate_alt_text_drafts.py
+        Produces draft alt text for all figures needing descriptions.
+        Output → jobs/{job}/reports/alt_text_drafts.json
+
+Step 2: generate_alt_text_review_report.py
+        Produces HTML review report for human inspection.
+        Output → jobs/{job}/reports/alt_text_review.html
+
+Step 3: [HUMAN REVIEWS AND APPROVES]
+        Reviewer edits alt_text_drafts.json into alt_map_approved.json
+        and confirms each entry. Decorative figures are flagged.
+
+Step 4: fix_figure_alt_text.py --alt-map alt_map_approved.json
+        Applies approved descriptions. Figures marked decorative
+        receive empty Alt and are artifacted.
+```
+
+Never apply fix_figure_alt_text.py in manual mode without a confirmed
+human-approved alt_map_approved.json. Never treat auto-placeholder text
+(`[Figure N — alt text required]`) as production-ready.
 
 ---
 
@@ -201,7 +252,7 @@ the tool cannot run. A compliance failure means the document does not comply.
 - Never process a PDF not explicitly named as the active source
 - Never hand off a document where veraPDF PDF/UA still fails
 - Never modify files in `workspace/input/` — source PDFs are read-only
-- Never output to `workspace/jobs/` — that is for intermediate work only
+- Never output intermediate files to `workspace/output/`
 - Always run `preservation_audit.py` after any repair
 - Always run `metadata_xmp_parity_audit.py` after final save
 - Font replacement is last resort only — geometry match first
