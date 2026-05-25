@@ -229,7 +229,18 @@ for xref, s_type in walk_for_type(struct_root_xref, doc, {'Table', 'TH', 'TD'}):
     elif s_type == 'TH':
         th_cells_found += 1
         attrs = doc.xref_get_key(xref, 'A')
-        scope_present = attrs[0] != 'null' and 'Scope' in attrs[1]
+        scope_present = False
+        if attrs[0] != 'null':
+            if attrs[0] == 'xref':
+                # Resolve indirect attribute dictionary
+                try:
+                    target_xref = int(attrs[1].split()[0])
+                    obj_str = doc.xref_object(target_xref)
+                    scope_present = '/Scope' in obj_str
+                except Exception:
+                    scope_present = False
+            else:
+                scope_present = 'Scope' in attrs[1]
         if not scope_present:
             th_missing_scope += 1
             pg = get_page_number_for_xref(xref, doc)

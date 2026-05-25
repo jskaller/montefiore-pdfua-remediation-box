@@ -207,6 +207,23 @@ or FAIL, document in STATUS.json, do not attempt auto-repair.
 Apply repairs in this order:
 1. `fix_pdfua_identifier.py` — metadata only, safe to run first
 2. `fix_metadata_xmp_parity.py` — metadata only, safe to run early
+
+   **Before calling this script**, read the document content and derive:
+   - `--title`: the main visible heading of the document. Not a footer,
+     filename, or application name. If multiple headings exist, use the
+     primary document title.
+   - `--subject`: one sentence describing what the document is and its
+     purpose (e.g. "Instructions for completing Montefiore's Authorization
+     for Release of Health Information form").
+   - `--keywords`: 4-8 comma-separated terms covering the topic,
+     department, form number, and relevant clinical or administrative
+     context (e.g. "Montefiore, ROI, Authorization, Release of Health
+     Information, HIPAA, Form Instructions").
+
+   Pass all three as explicit arguments — do not rely on source PDF
+   metadata values, which are frequently wrong, empty, or artifacts.
+   The script will fail with MISSING_REQUIRED_ARGS if these cannot be
+   determined — that is a hard stop. Read the document and re-run.
 3. `fix_notdef_glyphs.py` — font-level, no struct tree impact
 4. `fix_cidset.py` — font descriptor only, no struct tree impact
 5. `fix_contrast_color_runs.py` — content streams, no struct tree impact

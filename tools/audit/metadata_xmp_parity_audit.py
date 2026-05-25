@@ -12,8 +12,9 @@ Required fixed values (per METADATA_XMP_PARITY_HARD_GATE.md):
 Also checks:
   - pdfuaid:part = 1 (PDF/UA-1)
   - pdfuaid:rev must NOT be present (PDF/UA-2 field)
-  - Title present and meaningful
-  - Subject present
+  - Title present, meaningful, and not a footer/header artifact
+  - Subject present and meaningful (not a single word or number)
+  - Keywords present and non-empty
   - Document language set in catalog
   - Info dict and XMP values match for all key fields
 
@@ -45,6 +46,31 @@ REQUIRED = {
     'creator':  'Montefiore Einstein',
     'producer': 'Montefiore Einstein',
 }
+
+# Values that look like metadata but are actually artifacts from footers,
+# page numbers, or source application defaults. Any title or subject matching
+# these patterns is treated as missing.
+ARTIFACT_PATTERNS = [
+    r'^\d+$',                           # pure number e.g. "10"
+    r'^health information management$', # footer text
+    r'^microsoft word',                 # application name
+    r'^adobe acrobat',                  # application name
+    r'^untitled',                       # default
+    r'^document\d*$',                   # default
+]
+
+def is_meaningful(value, min_words=3):
+    """Return True if value looks like real content rather than an artifact."""
+    if not value or len(value.strip()) < 4:
+        return False
+    v = value.strip().lower()
+    for pattern in ARTIFACT_PATTERNS:
+        if re.match(pattern, v, re.I):
+            return False
+    # Must have at least min_words words
+    if len(v.split()) < min_words:
+        return False
+    return True
 
 try:
     doc  = fitz.open(args.pdf)
@@ -91,9 +117,8 @@ field_map = {
 }
 
 for info_key, xmp_tag in field_map.items():
-    info_val = meta.get(info_key, '').strip()
-    xmp_v    = xmp_val(xmp_tag).strip()
-    # Strip any residual RDF wrapper text from comparison
+    info_val   = meta.get(info_key, '').strip()
+    xmp_v      = xmp_val(xmp_tag).strip()
     info_clean = re.sub(r'<[^>]+>', '', info_val).strip()
     xmp_clean  = re.sub(r'<[^>]+>', '', xmp_v).strip()
     matched    = info_clean == xmp_clean
@@ -119,32 +144,56 @@ has_rev = xmp_tag_present('pdfuaid:rev')
 checks.append({
     'field': 'pdfuaid_rev_absent',
     'pass':  not has_rev,
-    'note':  'pdfuaid:rev is present — this is a PDF/UA-2 field and must be removed '
-             'from PDF/UA-1 documents — run fix_metadata_xmp_parity.py'
+    'note':  'pdfuaid:rev is present — PDF/UA-2 field, must be removed from PDF/UA-1 documents'
              if has_rev else ''
 })
 
-# ── Check 4: Descriptive fields present ──────────────────────────────────────
+# ── Check 4: Title — present, meaningful, not an artifact ────────────────────
 
 title = re.sub(r'<[^>]+>', '', meta.get('title', '')).strip()
+title_ok = is_meaningful(title, min_words=3)
 checks.append({
     'field': 'title_present',
     'value': title,
-    'pass':  bool(title) and len(title) > 3,
-    'note':  'No meaningful document title — pass --title to fix_metadata_xmp_parity.py'
-             if not (bool(title) and len(title) > 3) else ''
+    'pass':  title_ok,
+    'note':  (
+        'Title is missing, too short, or appears to be a footer/artifact '
+        f'("{title}") — pass --title to fix_metadata_xmp_parity.py with the '
+        'actual document title derived from document content'
+    ) if not title_ok else ''
 })
 
+# ── Check 5: Subject — present and meaningful ─────────────────────────────────
+
 subject = re.sub(r'<[^>]+>', '', meta.get('subject', '')).strip()
+subject_ok = is_meaningful(subject, min_words=3)
 checks.append({
     'field': 'subject_present',
     'value': subject,
-    'pass':  bool(subject) and len(subject) > 3,
-    'note':  'No subject — pass --subject to fix_metadata_xmp_parity.py'
-             if not (bool(subject) and len(subject) > 3) else ''
+    'pass':  subject_ok,
+    'note':  (
+        'Subject is missing, too short, or not meaningful '
+        f'("{subject}") — pass --subject to fix_metadata_xmp_parity.py '
+        'with a one-sentence description derived from document content'
+    ) if not subject_ok else ''
 })
 
-# ── Check 5: Document language ────────────────────────────────────────────────
+# ── Check 6: Keywords — present and non-empty ────────────────────────────────
+
+keywords = re.sub(r'<[^>]+>', '', meta.get('keywords', '')).strip()
+keywords_ok = bool(keywords) and len(keywords) > 3
+checks.append({
+    'field': 'keywords_present',
+    'value': keywords,
+    'pass':  keywords_ok,
+    'note':  (
+        'Keywords are missing or empty — pass --keywords to '
+        'fix_metadata_xmp_parity.py with comma-separated keywords '
+        'derived from document content'
+    ) if not keywords_ok else ''
+})
+
+# ── Check 7: Document language ────────────────────────────────────────────────
 
 catalog  = doc.pdf_catalog()
 lang_ref = doc.xref_get_key(catalog, 'Lang')
