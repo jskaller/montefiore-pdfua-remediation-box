@@ -63,6 +63,7 @@ Switch to VISION_MODEL before calling `visual_qa.py` or
 | Task | Tool(s) |
 |------|---------|
 | Full remediation job | Load skill → follow gate sequence below |
+| Repair plan lookup | `tools/audit/parse_verapdf_summary.py` → `tools/audit/lookup_repair_plan.py` — run after baseline veraPDF, returns ordered repair steps |
 | Structural validation | `tools/audit/run_qpdf_check.sh` |
 | PDF/UA-1 + WCAG validation | `tools/audit/run_verapdf_profiles.sh` (runs PDF/UA-1, WCAG-2-2, ISO-32000-1 only) |
 | PDF/UA-2 validation | `tools/audit/run_verapdf_profiles.sh --pdfua2` (only when operator explicitly requests PDF/UA-2) |
@@ -72,7 +73,7 @@ Switch to VISION_MODEL before calling `visual_qa.py` or
 | Contrast audit | `tools/audit/contrast_audit.py` |
 | OCR pre-flight | `tools/audit/detect_image_only_pages.py` |
 | OCR repair | `ocrmypdf --skip-text -l <lang>` (see OCR_REMEDIATION_RULE) |
-| Alt text pipeline | `tools/repair/generate_alt_text_drafts.py` → `tools/repair/generate_alt_text_review_report.py` → [human review] → `tools/repair/fix_figure_alt_text.py --alt-map` |
+| Alt text pipeline | If `jobs/{job}/reports/alt_map_approved.json` exists → `fix_figure_alt_text.py --alt-map` directly. If not → `generate_alt_text_drafts.py` → `generate_alt_text_review_report.py` → [human review] → `fix_figure_alt_text.py --alt-map` |
 | Table repair | `tools/repair/fix_table_headers.py` |
 | Metadata repair | `tools/repair/fix_metadata_xmp_parity.py` |
 | Contrast repair | `tools/repair/fix_contrast_color_runs.py` |
@@ -151,7 +152,55 @@ Every remediation job must pass these gates in order:
 4. `table_semantics_audit.py` — struct tree + visual table cross-check
 5. `contrast_audit.py` — WCAG 1.4.3 contrast
 
-### Repair (as needed per audit findings)
+### Repair plan lookup (before any repair)
+
+After the baseline veraPDF audit, always run:
+
+```bash
+# Parse veraPDF XML into structured failures
+python3 tools/audit/parse_verapdf_summary.py \
+  $JOB/audit/verapdf_pre*.xml > $JOB/audit/failures.json
+
+# Look up the ordered repair plan
+python3 tools/audit/lookup_repair_plan.py \
+  $JOB/audit/failures.json \
+  --map tools/audit/rule_repair_map.json > $JOB/audit/repair_plan.json
+```
+
+`repair_plan.json` is the starting point for repair decisions — not an
+unconditional instruction set. Use it to avoid reasoning from scratch on
+known patterns. Override it when audit evidence requires.
+
+#### Executing each repair step
+
+For each `repair_step` in `repair_plan.json`, in order:
+
+1. Execute the repair script
+2. Re-run veraPDF on the output
+3. **If the addressed rule now passes** → continue to next step. No logging needed — expected outcome.
+4. **If the addressed rule still fails** → stop. Reason from AGENTS.md. Try an alternative approach.
+   → Log to STATUS.json: rule ID, script tried, why it failed, what was tried instead, outcome.
+5. **If a new rule failure appears** not in the original plan → treat as `unknown_rule`.
+   → Reason from AGENTS.md. Log to STATUS.json: rule ID, reasoning, script used, outcome.
+
+#### What to log in STATUS.json
+
+| Event | Log? |
+|-------|------|
+| Rule in map → script ran → veraPDF passes | **No** — expected, map is correct |
+| Rule in map → script ran → veraPDF still fails | **Yes** — map entry may be wrong |
+| Rule not in map → agent reasoned → veraPDF passes | **Yes** — candidate for map update |
+| Rule not in map → agent reasoned → veraPDF still fails | **Yes** — escalate, manual review |
+
+Only deviations from expected outcomes are logged. Successful known-pattern
+repairs are not noise worth capturing — the map already encodes that they work.
+
+#### Manual escalations
+
+For any entry in `manual_escalations`: set job result to REVIEW_REQUIRED
+or FAIL, document in STATUS.json, do not attempt auto-repair.
+
+### Repair (as needed per repair_plan.json)
 
 **Repair order is critical — struct tree repairs must run last.**
 
@@ -186,31 +235,66 @@ or multiple saves.
 
 ---
 
-## Alt text pipeline — human-in-the-loop
+## Alt text pipeline — per-job, branching on approved map
 
-Alt text requires a mandatory human review gate. Never skip it.
+The approved alt map is per-job and per-file. It always lives at:
 
 ```
-Step 1: generate_alt_text_drafts.py
-        Produces draft alt text for all figures needing descriptions.
-        Output → jobs/{job}/reports/alt_text_drafts.json
+jobs/{TICKET}_{basename}/reports/alt_map_approved.json
+```
 
-Step 2: generate_alt_text_review_report.py
+Never read from or write to `workspace/alt_map_approved.json` — that
+location is not used. Never share an approved map between jobs.
+
+### Branch A — approved map already exists
+
+If `jobs/{job}/reports/alt_map_approved.json` exists at the start of
+the alt text repair step, apply it directly without generating drafts
+or pausing for review:
+
+```
+fix_figure_alt_text.py <input.pdf> <output.pdf> \
+  --alt-map jobs/{job}/reports/alt_map_approved.json
+```
+
+Expected result: `FIXED` or `ALREADY_CORRECT`. If result is `PARTIAL`
+(some figures not in map), stop and report which figures were skipped —
+do not continue until resolved.
+
+### Branch B — no approved map exists
+
+If `jobs/{job}/reports/alt_map_approved.json` does not exist:
+
+```
+Step 1: generate_alt_text_drafts.py <input.pdf> \
+          jobs/{job}/reports/alt_text_drafts.json
+        Produces vision-model draft alt text for all figures.
+
+Step 2: generate_alt_text_review_report.py \
+          jobs/{job}/reports/alt_text_drafts.json \
+          jobs/{job}/reports/alt_text_review.html
         Produces HTML review report for human inspection.
-        Output → jobs/{job}/reports/alt_text_review.html
 
-Step 3: [HUMAN REVIEWS AND APPROVES]
-        Reviewer edits alt_text_drafts.json into alt_map_approved.json
-        and confirms each entry. Decorative figures are flagged.
+Step 3: [PAUSE — human review required]
+        Display the path to alt_text_review.html and alt_text_drafts.json.
+        Stop and wait for the operator to confirm approval.
+        The operator saves their approved map to:
+          jobs/{job}/reports/alt_map_approved.json
 
-Step 4: fix_figure_alt_text.py --alt-map alt_map_approved.json
+Step 4: [RESUME on operator instruction]
+        fix_figure_alt_text.py <input.pdf> <output.pdf> \
+          --alt-map jobs/{job}/reports/alt_map_approved.json
         Applies approved descriptions. Figures marked decorative
         receive empty Alt and are artifacted.
 ```
 
-Never apply fix_figure_alt_text.py in manual mode without a confirmed
-human-approved alt_map_approved.json. Never treat auto-placeholder text
-(`[Figure N — alt text required]`) as production-ready.
+### Rules
+
+- Never apply fix_figure_alt_text.py without a confirmed approved map.
+- Never treat auto-placeholder text (`[Figure N — alt text required]`)
+  as production-ready — it must be replaced before packaging.
+- After applying, re-run veraPDF to confirm no Figure elements remain
+  without meaningful Alt text.
 
 ---
 

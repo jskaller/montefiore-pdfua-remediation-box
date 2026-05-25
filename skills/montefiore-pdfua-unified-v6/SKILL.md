@@ -104,20 +104,29 @@ pass8_final.pdf
 
 ---
 
-## Alt text pipeline — correct sequence
+## Alt text pipeline — branching on approved map
 
-The alt text workflow has a mandatory human-in-the-loop gate:
+The approved map is per-job, per-file. It always lives at:
+`jobs/{TICKET}_{basename}/reports/alt_map_approved.json`
 
+**If the approved map already exists** → apply directly, no pause:
+```bash
+fix_figure_alt_text.py <input.pdf> <output.pdf> \
+  --alt-map jobs/{job}/reports/alt_map_approved.json
 ```
-1. generate_alt_text_drafts.py    ← produces draft JSON
-2. generate_alt_text_review_report.py  ← produces HTML for human review
-3. [HUMAN REVIEWS AND APPROVES]
-4. fix_figure_alt_text.py --alt-map alt_map_approved.json  ← applies approved text
+
+**If no approved map exists** → generate drafts → pause for review:
+```
+1. generate_alt_text_drafts.py → jobs/{job}/reports/alt_text_drafts.json
+2. generate_alt_text_review_report.py → jobs/{job}/reports/alt_text_review.html
+3. [PAUSE] Show operator the path to review HTML. Wait for approval.
+4. Operator saves approved map to jobs/{job}/reports/alt_map_approved.json
+5. [RESUME] fix_figure_alt_text.py --alt-map jobs/{job}/reports/alt_map_approved.json
 ```
 
-Never apply fix_figure_alt_text.py in manual mode without a
-human-approved alt_map_approved.json. Never treat auto-placeholder
-text as production-ready.
+Never read from workspace/alt_map_approved.json — that location is not used.
+Never share an approved map between jobs.
+Never treat placeholder text as production-ready.
 
 ---
 

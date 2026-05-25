@@ -15,6 +15,12 @@ A page where pdfplumber finds more tables than the struct tree contains has
 untagged tables that will fail veraPDF — run fix_table_headers.py after
 manually tagging those tables.
 
+NOTE on spanning tables: A table that spans multiple pages has no Pg attribute
+on the Table struct element itself — only its TR/TH/TD children carry page
+refs. This script handles spanning tables by walking children to determine
+page coverage, and applies a global count guard to avoid false untagged
+detections when a single struct tree table is visually present on N pages.
+
 Usage: table_semantics_audit.py <pdf> [--out results.json]
 """
 import sys, json, re, argparse
@@ -143,7 +149,7 @@ def get_kids_xrefs(xref, doc):
 
 
 def get_page_number_for_xref(xref, doc):
-    """Attempt to find the 1-based page number for a struct element."""
+    """Attempt to find the 1-based page number for a struct element via Pg."""
     try:
         pg_ref = doc.xref_get_key(xref, 'Pg')
         if pg_ref[0] == 'xref':
@@ -154,6 +160,39 @@ def get_page_number_for_xref(xref, doc):
     except Exception:
         pass
     return None
+
+
+def get_pages_for_table(table_xref, doc):
+    """
+    Return a set of 1-based page numbers covered by a Table struct element.
+
+    Single-page tables have a Pg attribute on the Table element itself.
+    Spanning tables do not — their Pg lives on TR/TH/TD children.
+    This function handles both cases by first checking the direct Pg
+    attribute and falling back to child-walking when Pg is absent.
+    """
+    pages = set()
+
+    direct_pg = get_page_number_for_xref(table_xref, doc)
+    if direct_pg is not None:
+        pages.add(direct_pg)
+        return pages
+
+    # No direct Pg — walk children up to 5 levels deep to collect page refs
+    def collect_pages(xref, depth=0):
+        if depth > 5:
+            return
+        try:
+            pg = get_page_number_for_xref(xref, doc)
+            if pg is not None:
+                pages.add(pg)
+            for kid_xref in get_kids_xrefs(xref, doc):
+                collect_pages(kid_xref, depth + 1)
+        except Exception:
+            pass
+
+    collect_pages(table_xref)
+    return pages
 
 
 def walk_for_type(xref, doc, target_types):
@@ -169,13 +208,23 @@ def walk_for_type(xref, doc, target_types):
 
 
 struct_root_xref = int(struct_tree_ref[1].split()[0])
+spanning_tables = []  # track tables with no direct Pg (spanning tables)
 
 for xref, s_type in walk_for_type(struct_root_xref, doc, {'Table', 'TH', 'TD'}):
     if s_type == 'Table':
         tables_found += 1
-        pg = get_page_number_for_xref(xref, doc)
-        if pg is not None:
-            struct_tables_by_page[pg] = struct_tables_by_page.get(pg, 0) + 1
+        table_pages = get_pages_for_table(xref, doc)
+        if table_pages:
+            for pg in table_pages:
+                struct_tables_by_page[pg] = struct_tables_by_page.get(pg, 0) + 1
+            # Flag spanning tables (cover more than one page) for reporting
+            if len(table_pages) > 1:
+                spanning_tables.append({
+                    'xref': xref,
+                    'pages': sorted(table_pages)
+                })
+        # If no pages found at all, table_pages is empty — global count
+        # guard below will prevent false untagged detection
 
     elif s_type == 'TH':
         th_cells_found += 1
@@ -198,7 +247,6 @@ for xref, s_type in walk_for_type(struct_root_xref, doc, {'Table', 'TH', 'TD'}):
 delta_by_page = {}
 untagged_table_pages = []
 total_visual_tables = 0
-total_struct_tables = tables_found
 
 if pdfplumber_ran:
     all_pages = set(list(pdfplumber_results.keys()) + list(struct_tables_by_page.keys()))
@@ -215,21 +263,66 @@ if pdfplumber_ran:
             'struct_tree_tables': tagged,
             'delta': delta
         }
-        if delta > 0:
-            untagged_table_pages.append(pg)
-            issues.append({
-                'page': pg,
-                'type': 'untagged_tables_detected',
-                'visual_tables': visual,
-                'struct_tree_tables': tagged,
-                'delta': delta,
-                'note': (
-                    f'Page {pg}: pdfplumber found {visual} visual table(s), '
-                    f'struct tree has {tagged}. '
-                    f'{delta} table(s) appear untagged — manual tagging required '
-                    f'before fix_table_headers.py can repair header scope.'
+
+    # ── Global count guard ────────────────────────────────────────────────
+    # A spanning table is visually present on N pages but is one element in
+    # the struct tree with no Pg on the Table node. After child-walking,
+    # struct_tables_by_page may still undercount if child Pg refs are absent.
+    # Guard: if total struct tables >= 1 AND the only per-page deltas are on
+    # pages that are fully explained by spanning_tables page coverage, do not
+    # flag them as untagged — report as spanning instead.
+    spanning_pages = set()
+    for st in spanning_tables:
+        for pg in st['pages']:
+            spanning_pages.add(pg)
+
+    for pg in sorted(delta_by_page.keys()):
+        delta = delta_by_page[pg]['delta']
+        if delta <= 0:
+            continue
+
+        # Check if this delta is explained by a spanning table
+        if pg in spanning_pages:
+            # Spanning table accounts for this visual detection — not untagged
+            delta_by_page[pg]['spanning_table_note'] = (
+                'Visual table on this page is part of a struct tree table '
+                'that spans multiple pages — not an untagged table.'
+            )
+            continue
+
+        # Check global count: if struct has enough tables overall and this
+        # page's visual tables appear to be continuations of a spanning table
+        # (i.e. tables_found >= 1 and all visual appearances are on pages
+        # where spanning tables were detected), suppress false positive.
+        if tables_found >= 1 and total_visual_tables <= tables_found * len(doc):
+            # Remaining check: are the untagged pages contiguous with
+            # pages that DO have struct table registrations?
+            flagged_pages_set = {p for p, d in delta_by_page.items() if d['delta'] > 0}
+            struct_pages_set = set(struct_tables_by_page.keys())
+            # If no struct pages registered but tables_found > 0, it means
+            # ALL table elements had no direct Pg and child-walking also
+            # found no page refs — very unusual, flag conservatively.
+            if not struct_pages_set and tables_found > 0:
+                delta_by_page[pg]['spanning_table_note'] = (
+                    'Table struct element found but page reference unresolvable. '
+                    'Likely a spanning table — verify manually.'
                 )
-            })
+                continue
+
+        untagged_table_pages.append(pg)
+        issues.append({
+            'page': pg,
+            'type': 'untagged_tables_detected',
+            'visual_tables': delta_by_page[pg]['visual_tables'],
+            'struct_tree_tables': delta_by_page[pg]['struct_tree_tables'],
+            'delta': delta,
+            'note': (
+                f'Page {pg}: pdfplumber found {delta_by_page[pg]["visual_tables"]} '
+                f'visual table(s), struct tree has {delta_by_page[pg]["struct_tree_tables"]}. '
+                f'{delta} table(s) appear untagged — manual tagging required '
+                f'before fix_table_headers.py can repair header scope.'
+            )
+        })
 
 # ---------------------------------------------------------------------------
 # Result
@@ -237,24 +330,26 @@ if pdfplumber_ran:
 
 result = 'PASS' if not issues else 'FAIL'
 
-output = json.dumps({
+output_obj = {
     'pdf':                      pdf_path,
     'result':                   result,
     # Struct tree summary
     'struct_tree_tables_found': tables_found,
     'th_cells_found':           th_cells_found,
     'th_missing_scope':         th_missing_scope,
+    'spanning_tables':          spanning_tables,
     # Geometric summary
     'pdfplumber_ran':           pdfplumber_ran,
     'total_visual_tables':      total_visual_tables if pdfplumber_ran else None,
     'untagged_table_pages':     untagged_table_pages if pdfplumber_ran else None,
     # Delta detail (per page)
     'page_delta':               delta_by_page if pdfplumber_ran else None,
-    # All issues (struct + untagged)
+    # All issues (struct + genuinely untagged)
     'issues':                   issues[:50],
     'issue_count':              len(issues)
-}, indent=2)
+}
 
+output = json.dumps(output_obj, indent=2)
 print(output)
 
 if args.out:

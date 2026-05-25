@@ -1,0 +1,259 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "standard": "PDF/UA-1 (ISO 14289-1)",
+    "purpose": "Maps veraPDF rule IDs to repair scripts. Enables the agent to route directly to the correct fix without reasoning from scratch. Keys match the specification/clause format output by parse_verapdf_summary.py.",
+    "key_format": "{specification}/{clause}  e.g. PDF/UA-1/7.18.6.3",
+    "confidence_levels": {
+      "CONFIRMED": "Verified on at least one real Montefiore job — outcome was PASS",
+      "EXPECTED":  "Correct per ISO 14289-1 spec + veraPDF rule definitions — not yet confirmed on a Montefiore job",
+      "MANUAL":    "Cannot be auto-repaired — requires human intervention or Acrobat Pro"
+    },
+    "repair_order_note": "repair_order matches the mandatory sequence in AGENTS.md. Always apply repairs in ascending order. fix_table_headers.py (order 10) MUST be last — no saves may occur after it.",
+    "confirmed_jobs": 1,
+    "last_updated": "2026-05-25"
+  },
+
+  "rules": {
+
+    "PDF/UA-1/6.2": {
+      "clause": "6.2",
+      "description": "Document must include a conforming PDF/UA identifier in XMP metadata (pdfuaid:part=1, pdfuaid:amd=2005)",
+      "repair_script": "tools/repair/fix_pdfua_identifier.py",
+      "repair_order": 1,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 1,
+      "notes": "Almost always needed on unremediated PDFs. Sets pdfuaid:part=1 and pdfuaid:amd=2005. Never set part=2."
+    },
+
+    "PDF/UA-1/6.7.2": {
+      "clause": "6.7.2",
+      "description": "CIDSet in font descriptor is incomplete for subset-embedded font",
+      "repair_script": "tools/repair/fix_cidset.py",
+      "repair_order": 4,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 1,
+      "notes": "Font descriptor only — no struct tree impact. Safe to run early."
+    },
+
+    "PDF/UA-1/6.2.11.8": {
+      "clause": "6.2.11.8",
+      "description": "XMP metadata and document info dictionary are not in parity (Author, Creator, Producer mismatch)",
+      "repair_script": "tools/repair/fix_metadata_xmp_parity.py",
+      "repair_order": 2,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 1,
+      "notes": "Sets Author, Creator, Producer to 'Montefiore Einstein'. Run metadata_xmp_parity_audit.py after to verify. Run again after ALL repairs to confirm no subsequent script corrupted metadata."
+    },
+
+    "PDF/UA-1/7.1-1": {
+      "clause": "7.1-1",
+      "description": "Document is not marked as tagged (Marked entry missing from Catalog)",
+      "repair_script": "tools/repair/fix_pdfua_identifier.py",
+      "repair_order": 1,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "EXPECTED",
+      "confirmed_jobs": 0,
+      "notes": "Fix sets Marked=true in the document catalog. If the document has no struct tree at all, escalate — full retagging requires Acrobat Pro or CommonLook."
+    },
+
+    "PDF/UA-1/7.1-2": {
+      "clause": "7.1-2",
+      "description": "Document language not set (Lang entry missing from Catalog)",
+      "repair_script": "tools/repair/fix_metadata_xmp_parity.py",
+      "repair_order": 2,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "EXPECTED",
+      "confirmed_jobs": 0,
+      "notes": "Lang entry should be set to 'en-US' for English documents unless otherwise specified."
+    },
+
+    "PDF/UA-1/7.1-3": {
+      "clause": "7.1-3",
+      "description": "Document title not set or DisplayDocTitle not set to true",
+      "repair_script": "tools/repair/fix_metadata_xmp_parity.py",
+      "repair_order": 2,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "EXPECTED",
+      "confirmed_jobs": 0,
+      "notes": "Requires ViewerPreferences/DisplayDocTitle=true and a non-empty dc:title in XMP."
+    },
+
+    "PDF/UA-1/7.2-1": {
+      "clause": "7.2-1",
+      "description": "Real content not tagged — content outside struct tree",
+      "repair_script": null,
+      "repair_order": null,
+      "run_last": false,
+      "args_pattern": null,
+      "confidence": "MANUAL",
+      "confirmed_jobs": 0,
+      "notes": "Cannot be auto-repaired. Requires Acrobat Pro or CommonLook to retag untagged content. Set result to FAIL and escalate."
+    },
+
+    "PDF/UA-1/7.3-1": {
+      "clause": "7.3-1",
+      "description": "Figure element missing Alt attribute (no alternate text)",
+      "repair_script": "tools/repair/fix_figure_alt_text.py",
+      "repair_order": 6,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf> --alt-map alt_map_approved.json",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 1,
+      "notes": "Requires human-approved alt_map_approved.json. Run generate_alt_text_drafts.py then generate_alt_text_review_report.py first. Never apply auto-placeholder text to production output. Figures marked decorative receive empty Alt."
+    },
+
+    "PDF/UA-1/7.3-3": {
+      "clause": "7.3-3",
+      "description": "Figure element has empty or meaningless Alt text (placeholder detected)",
+      "repair_script": "tools/repair/fix_figure_alt_text.py",
+      "repair_order": 6,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf> --alt-map alt_map_approved.json",
+      "confidence": "EXPECTED",
+      "confirmed_jobs": 0,
+      "notes": "Same workflow as 7.3-1. Human review gate required."
+    },
+
+    "PDF/UA-1/7.5-1": {
+      "clause": "7.5-1",
+      "description": "TH element missing Scope attribute",
+      "repair_script": "tools/repair/fix_table_headers.py",
+      "repair_order": 10,
+      "run_last": true,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 1,
+      "notes": "MUST RUN LAST. TH Scope xrefs are invalidated by any subsequent save or pikepdf operation. No PDF writes may occur after this script."
+    },
+
+    "PDF/UA-1/7.5-2": {
+      "clause": "7.5-2",
+      "description": "Table header scope is incorrect or inconsistent",
+      "repair_script": "tools/repair/fix_table_headers.py",
+      "repair_order": 10,
+      "run_last": true,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "EXPECTED",
+      "confirmed_jobs": 0,
+      "notes": "Same constraint as 7.5-1 — must run last."
+    },
+
+    "PDF/UA-1/7.6-1": {
+      "clause": "7.6-1",
+      "description": "List element (L) missing ListNumbering attribute",
+      "repair_script": "tools/repair/fix_list_numbering.py",
+      "repair_order": 8,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "EXPECTED",
+      "confirmed_jobs": 0,
+      "notes": "Sets ListNumbering on L elements. Run before fix_parent_tree_mcids and fix_table_headers."
+    },
+
+    "PDF/UA-1/7.18.1-1": {
+      "clause": "7.18.1-1",
+      "description": "Annotation missing Contents entry (link has no accessible description)",
+      "repair_script": "tools/repair/fix_link_annotation_descriptions.py",
+      "repair_order": 7,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "EXPECTED",
+      "confirmed_jobs": 0,
+      "notes": "Adds Contents key to Link annotations. Run after alt text, before list and table repairs."
+    },
+
+    "PDF/UA-1/7.18.3-1": {
+      "clause": "7.18.3-1",
+      "description": "Widget annotation not tagged or missing struct tree entry",
+      "repair_script": null,
+      "repair_order": null,
+      "run_last": false,
+      "args_pattern": null,
+      "confidence": "MANUAL",
+      "confirmed_jobs": 0,
+      "notes": "Form widget tagging is complex. Flag for human review. May require Acrobat Pro remediation."
+    },
+
+    "PDF/UA-1/7.21.3-1": {
+      "clause": "7.21.3-1",
+      "description": "Font not embedded",
+      "repair_script": null,
+      "repair_order": null,
+      "run_last": false,
+      "args_pattern": null,
+      "confidence": "MANUAL",
+      "confirmed_jobs": 0,
+      "notes": "Check font_inventory.py + font_geometry_matcher.py first for geometry match. Font replacement is last resort. If no geometry match available, escalate — cannot auto-repair."
+    },
+
+    "PDF/UA-1/7.21.4.2-1": {
+      "clause": "7.21.4.2-1",
+      "description": "CIDSet entry in font descriptor is incomplete for subset font",
+      "repair_script": "tools/repair/fix_cidset.py",
+      "repair_order": 4,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 1,
+      "notes": "Alias for 6.7.2 in some veraPDF profile versions. Same fix applies."
+    },
+
+    "PDF/UA-1/7.21.6-1": {
+      "clause": "7.21.6-1",
+      "description": ".notdef glyph rendered — font has missing glyph mappings",
+      "repair_script": "tools/repair/fix_notdef_glyphs.py",
+      "repair_order": 3,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "EXPECTED",
+      "confirmed_jobs": 0,
+      "notes": "Font-level fix, no struct tree impact. Run before any struct tree repairs."
+    },
+
+    "WCAG-2-2-Machine/1.4.3": {
+      "clause": "1.4.3",
+      "description": "Text contrast ratio below 4.5:1 (WCAG AA minimum)",
+      "repair_script": "tools/repair/fix_contrast_color_runs.py",
+      "repair_order": 5,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 1,
+      "notes": "Run contrast_audit.py first to identify affected runs. Fix adjusts color values in content streams. No struct tree impact."
+    },
+
+    "WCAG-2-2-Machine/1.1.1": {
+      "clause": "1.1.1",
+      "description": "Non-text content missing text alternative",
+      "repair_script": "tools/repair/fix_figure_alt_text.py",
+      "repair_order": 6,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf> --alt-map alt_map_approved.json",
+      "confidence": "EXPECTED",
+      "confirmed_jobs": 0,
+      "notes": "WCAG mirror of PDF/UA-1/7.3-1. Same repair script and human review gate apply."
+    }
+
+  },
+
+  "manual_escalation_triggers": [
+    "No StructTreeRoot — document is not tagged",
+    "Image-only page detected — OCR required before any repair",
+    "Font not embeddable — license restriction",
+    "Encryption present — cannot modify document",
+    "Corrupt xref table — qpdf repair failed",
+    "Widget annotations require form remediation"
+  ],
+
+  "agent_usage_instructions": "At the start of each job, after running parse_verapdf_summary.py, look up each failing rule_id in this map. For each match: (a) record the repair_script and repair_order, (b) sort all required repairs by repair_order ascending, (c) flag any rule with repair_script=null for MANUAL escalation, (d) confirm fix_table_headers.py (if needed) is always last. Execute repairs in order. If a rule_id is not in this map, reason from AGENTS.md rules and document the outcome in STATUS.json so the map can be updated."
+}

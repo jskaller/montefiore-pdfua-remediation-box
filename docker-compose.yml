@@ -14,7 +14,21 @@ services:
       - "127.0.0.1:18789:18789"
 
     volumes:
+      # ── Workspace (PDFs, jobs, output) ──────────────────────────────────────
       - ${WORKSPACE_PATH:-./workspace}:/app/workspace
+
+      # ── Live mounts — changes take effect without rebuild ────────────────────
+      # Edit any file in tools/, skills/, or the governing docs on the host
+      # and the container sees the change immediately.
+      #
+      # NOTE: new .sh scripts added after build need manual chmod +x on the host:
+      #   chmod +x tools/audit/my_new_script.sh
+      - ./tools:/app/tools
+      - ./skills:/app/skills
+      - ./AGENTS.md:/app/AGENTS.md
+      - ./SOUL.md:/app/SOUL.md
+      - ./IDENTITY.md:/app/IDENTITY.md
+      - ./TOOLS.md:/app/TOOLS.md
 
     stdin_open: true
     tty: true
