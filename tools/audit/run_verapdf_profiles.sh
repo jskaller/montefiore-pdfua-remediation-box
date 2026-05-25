@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
 # run_verapdf_profiles.sh
-# Runs all required veraPDF profiles against a PDF and writes XML reports.
-# Profiles run: PDF/UA-1 (profile), WCAG-2-2-Machine (pinned), ISO-32000-1-Tagged, PDF/UA-2 (if present)
+# Runs required veraPDF profiles against a PDF and writes XML reports.
 #
-# Usage: run_verapdf_profiles.sh <verapdf-bin> <profiles-root> <pdf> <out-dir>
+# Profiles always run:
+#   PDF/UA-1    — via PDFUA-1.xml profile (primary compliance target)
+#   WCAG-2-2    — via WCAG-2-2-Machine.xml (pinned, required)
+#   ISO-32000-1 — via ISO-32000-1-Tagged.xml (if present)
+#
+# PDF/UA-2 is NOT run by default. This is a PDF/UA-1 workflow.
+# Pass --pdfua2 explicitly if PDF/UA-2 validation is needed.
+#
+# Usage: run_verapdf_profiles.sh <verapdf-bin> <profiles-root> <pdf> <out-dir> [--pdfua2]
 # Exit: 0 = all profiles passed, 1 = one or more failures, 2 = usage error, 3 = missing profile
 
 set -euo pipefail
 
 if [ "$#" -lt 4 ]; then
-    echo "usage: run_verapdf_profiles.sh <verapdf-bin> <profiles-root> <pdf> <out-dir>" >&2
+    echo "usage: run_verapdf_profiles.sh <verapdf-bin> <profiles-root> <pdf> <out-dir> [--pdfua2]" >&2
     exit 2
 fi
 
@@ -17,6 +24,12 @@ VERAPDF="$1"
 PROFILES="$2"
 PDF="$3"
 OUT="$4"
+RUN_PDFUA2=false
+
+# Check for optional --pdfua2 flag
+for arg in "$@"; do
+    [ "$arg" = "--pdfua2" ] && RUN_PDFUA2=true
+done
 
 mkdir -p "$OUT"
 
@@ -40,6 +53,7 @@ run_profile() {
     echo "  running: $label"
     if "$VERAPDF" --format xml --verbose --maxfailuresdisplayed -1 "$@" "$PDF" > "$outfile" 2>&1; then
         echo "  result:  PASS -> $outfile"
+        PASS=$((PASS + 1))
     else
         echo "  result:  FAIL -> $outfile"
         FAIL=$((FAIL + 1))
@@ -49,7 +63,7 @@ run_profile() {
 echo "=== veraPDF validation: $(basename "$PDF") ==="
 
 if [ -f "$PDFUA1" ]; then
-    run_profile "PDF/UA-1 (profile)" \
+    run_profile "PDF/UA-1" \
         "$OUT/verapdf_pdfua_ua1.xml" \
         --profile "$PDFUA1"
 fi
@@ -64,8 +78,9 @@ if [ -f "$ISO" ]; then
         --profile "$ISO"
 fi
 
-if [ -f "$PDFUA2" ]; then
-    run_profile "PDF/UA-2" \
+# PDF/UA-2 only on explicit request
+if [ "$RUN_PDFUA2" = true ] && [ -f "$PDFUA2" ]; then
+    run_profile "PDF/UA-2 (explicit request)" \
         "$OUT/verapdf_pdfua2.xml" \
         --profile "$PDFUA2"
 fi
@@ -74,15 +89,17 @@ fi
 RESULT="PASS"
 [ "$FAIL" -gt 0 ] && RESULT="FAIL"
 
-cat > "$OUT/verapdf_summary.json" <<EOF
+cat > "$OUT/verapdf_summary.json" <<JSONEOF
 {
   "pdf": "$PDF",
   "result": "$RESULT",
-  "profiles_run": $((FAIL + PASS + $(ls "$OUT"/*.xml 2>/dev/null | wc -l))),
-  "failures": $FAIL,
+  "target": "PDF/UA-1",
+  "profiles_run": $((PASS + FAIL)),
+  "profiles_passed": $PASS,
+  "profiles_failed": $FAIL,
   "report_dir": "$OUT"
 }
-EOF
+JSONEOF
 
-echo "=== Summary: $RESULT (failures: $FAIL) ==="
+echo "=== Summary: $RESULT (passed: $PASS, failed: $FAIL) ==="
 [ "$FAIL" -eq 0 ]
