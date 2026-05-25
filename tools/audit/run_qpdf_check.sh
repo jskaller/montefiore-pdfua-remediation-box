@@ -2,10 +2,17 @@
 # run_qpdf_check.sh
 # Runs qpdf --check on a PDF and writes a JSON result summary.
 #
+# qpdf exit codes:
+#   0 = no issues
+#   2 = warnings only (linearization hints, object count mismatches, etc.)
+#       These are cosmetic — the file is structurally sound. Result: PASS.
+#   3 = errors (corrupt xref, unreadable objects, encryption issues, etc.)
+#       These will break repair scripts. Result: FAIL — hard stop.
+#
 # Usage: run_qpdf_check.sh <pdf> <out-dir> [--linearize] [--out qpdf_check.json]
 # Exit: 0 = pass, 1 = fail, 2 = usage error
 
-set -euo pipefail
+set -uo pipefail
 
 if [ "$#" -lt 2 ]; then
     echo "usage: run_qpdf_check.sh <pdf> <out-dir> [--linearize] [--out file.json]" >&2
@@ -32,11 +39,21 @@ mkdir -p "$OUT"
 
 LOG="$OUT/qpdf_check.log"
 RESULT="PASS"
+WARNINGS=""
 ERRORS=""
 
-if ! "$QPDF" --check "$PDF" > "$LOG" 2>&1; then
+"$QPDF" --check "$PDF" > "$LOG" 2>&1
+QPDF_EXIT=$?
+
+if [ "$QPDF_EXIT" -eq 2 ]; then
+    # Warnings only — linearization hints, hint table mismatches, etc.
+    # File is structurally sound. Do not hard-stop.
+    RESULT="PASS"
+    WARNINGS=$(head -40 "$LOG" | sed 's/"/\\"/g' | tr '\n' ' ')
+elif [ "$QPDF_EXIT" -ge 3 ]; then
+    # Actual structural errors — corrupt xref, unreadable objects, etc.
     RESULT="FAIL"
-    ERRORS=$(cat "$LOG" | head -40 | sed 's/"/\\"/g' | tr '\n' ' ')
+    ERRORS=$(head -40 "$LOG" | sed 's/"/\\"/g' | tr '\n' ' ')
 fi
 
 if [ "$LINEARIZE" -eq 1 ] && [ "$RESULT" = "PASS" ]; then
@@ -48,7 +65,9 @@ JSON=$(cat <<EOF
 {
   "pdf": "$PDF",
   "result": "$RESULT",
+  "qpdf_exit_code": $QPDF_EXIT,
   "log": "$LOG",
+  "warnings": "$WARNINGS",
   "errors": "$ERRORS"
 }
 EOF

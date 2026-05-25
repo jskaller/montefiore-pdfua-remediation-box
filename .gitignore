@@ -67,3 +67,4 @@ openclaw_migration/workspace/archive/*
 openclaw_migration/workspace/assets/validation_profiles/*
 !**/.gitkeep
 openclaw_migration/.env
+alt_map_approved.json
