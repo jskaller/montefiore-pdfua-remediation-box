@@ -17,7 +17,7 @@
   },
   "agents": {
     "defaults": {
-      "workspace": "/app/workspace",
+      "workspace": "/app",
       "model": {
         "primary": "nim/${PRIMARY_MODEL}",
         "fallbacks": []
