@@ -40,7 +40,8 @@ PDFUAID_AMD  = '<pdfuaid:amd>2005</pdfuaid:amd>'
 changes = []
 
 # ── Inject namespace if missing ───────────────────────────────────────────────
-if 'pdfuaid' not in xmp:
+# Ensure the pdfuaid namespace is declared even if tags already exist
+if 'xmlns:pdfuaid=' not in xmp:
     xmp = xmp.replace('<rdf:Description', f'<rdf:Description {PDFUAID_NS}', 1)
     changes.append('injected pdfuaid namespace')
 

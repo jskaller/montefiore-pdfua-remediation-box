@@ -1,9 +1,3 @@
-[init] Validation profiles already present — skipping clone.
-[init] Copied AGENTS.md to workspace.
-[init] Copied SOUL.md to workspace.
-[init] Copied IDENTITY.md to workspace.
-[init] Copied TOOLS.md to workspace.
-[init] Starting: cat /app/tools/repair/fix_table_headers.py
 #!/usr/bin/env python3
 """
 fix_table_headers.py

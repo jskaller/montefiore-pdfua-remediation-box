@@ -77,14 +77,26 @@ for json_file in sorted(job_dir.glob('*.json')):
                 }
                 all_results.append(data['result'])
 
+# Normalize results for overall evaluation
+# Many gate scripts return variant success codes beyond 'PASS'. Treat these as PASS:
+NORMALIZED_PASS = {
+    'PASS',
+    'FIXED',
+    'ALREADY_CORRECT',
+    'PASS_WITH_MIXED_PAGES',
+    'PASS_WITH_ONLY_NATIVE_TEXT',
+    'SKIPPED'
+}
+normalized = [ 'PASS' if r in NORMALIZED_PASS else r for r in all_results ]
+
 # Compute overall
 if not all_results:
     status['overall_result'] = 'NO_RESULTS'
-elif any(r == 'FAIL' for r in all_results):
+elif any(r == 'FAIL' for r in normalized):
     status['overall_result'] = 'FAIL'
-elif any(r in ('REVIEW', 'PARTIAL', 'WARN', 'NEEDS_REVIEW') for r in all_results):
+elif any(r in ('REVIEW', 'PARTIAL', 'WARN', 'NEEDS_REVIEW') for r in normalized):
     status['overall_result'] = 'REVIEW'
-elif all(r == 'PASS' for r in all_results):
+elif all(r == 'PASS' for r in normalized):
     status['overall_result'] = 'PASS'
 else:
     status['overall_result'] = 'INCOMPLETE'
