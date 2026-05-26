@@ -26,7 +26,7 @@ Exit codes:
   1  PARTIAL (some tables processed, some failed)
   2  ERROR
 """
-import sys, json, argparse, os, base64, re
+import sys, json, argparse, os, base64, re, shutil
 from pathlib import Path
 from collections import defaultdict
 
@@ -567,6 +567,7 @@ def main():
         }
         print(json.dumps(out))
         if args.out: Path(args.out).write_text(json.dumps(out, indent=2))
+        shutil.copy2(args.input_pdf, args.output_pdf)
         sys.exit(0)
 
     fitz_doc.close()
@@ -631,6 +632,7 @@ def main():
         }
         print(json.dumps(out, indent=2))
         if args.out: Path(args.out).write_text(json.dumps(out, indent=2))
+        shutil.copy2(args.input_pdf, args.output_pdf)
         sys.exit(0)
 
     # ── Vision model: confirm candidates and identify header rows ─────────
@@ -693,6 +695,7 @@ def main():
         }
         print(json.dumps(out, indent=2))
         if args.out: Path(args.out).write_text(json.dumps(out, indent=2))
+        shutil.copy2(args.input_pdf, args.output_pdf)
         sys.exit(0)
 
     # ── pikepdf: restructure struct tree ──────────────────────────────────

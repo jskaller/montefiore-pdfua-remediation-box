@@ -160,7 +160,7 @@ def check_prereqs():
 PASS_CODES = {
     'PASS', 'FIXED', 'ALREADY_CORRECT', 'PASS_WITH_MIXED_PAGES',
     'PASS_WITH_ONLY_NATIVE_TEXT', 'SKIPPED', 'OK', 'PLAN_READY',
-    'NO_FAILURES', 'NEEDS_REVIEW'
+    'NO_FAILURES', 'NEEDS_REVIEW', 'REVIEW_REQUIRED'
 }
 
 def is_pass(result):
@@ -415,12 +415,16 @@ table_pre = load_json(AUDIT_DIR/'table_semantics_pre.json')
 gate_results['table_semantics_pre'] = get_result(table_pre)
 emit('AUDIT', 'table_semantics', get_result(table_pre))
 
-# Extract TH scope issue count for repair plan
+# Extract TH scope issue count and untagged table pages for repair injection
 th_missing = 0
+untagged_table_pages = []
 if table_pre:
     th_missing = table_pre.get('th_missing_scope', 0)
+    untagged_table_pages = table_pre.get('untagged_table_pages', [])
 
-# 2f. Contrast audit
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE 3 — removed; plan generation moved inside iterative repair loop
+# ─────────────────────────────────────────────────────────────────────────────
 emit('AUDIT', 'contrast', 'RUNNING')
 rc, out, _ = run(
     ['python3', TOOLS/'audit'/'contrast_audit.py', PASS0,
@@ -430,10 +434,6 @@ rc, out, _ = run(
 contrast_pre = load_json(AUDIT_DIR/'contrast_pre.json')
 gate_results['contrast_pre'] = get_result(contrast_pre)
 emit('AUDIT', 'contrast', get_result(contrast_pre))
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PHASE 3 — removed; plan generation moved inside iterative repair loop
-# ─────────────────────────────────────────────────────────────────────────────
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PHASE 4 — Alt text check (before repair loop)
@@ -566,7 +566,23 @@ def build_plan(failures_path_iter, iter_num):
     manual_esc = pd.get('manual_escalations', [])
     unknown    = pd.get('unknown_rules', [])
 
-    # Inject TH fix if table semantics pre-audit found missing scope
+    # Inject fix_table_tagging.py if untagged tables detected (order 9, before TH fix)
+    table_tagging_script = 'tools/repair/fix_table_tagging.py'
+    has_tagging_fix = any(s['repair_script'] == table_tagging_script for s in steps)
+    if untagged_table_pages and not has_tagging_fix:
+        steps.append({
+            'step':            len(steps) + 1,
+            'repair_script':   table_tagging_script,
+            'repair_order':    9,
+            'run_last':        False,
+            'args_pattern':    '<input.pdf> <output.pdf>',
+            'rules_addressed': ['table_semantics/untagged_tables'],
+            'confidence':      'CONFIRMED',
+            'notes':           (f'Injected: {len(untagged_table_pages)} page(s) with '
+                                f'untagged tables detected. Runs before fix_table_headers.py.')
+        })
+
+    # Inject fix_table_headers.py if TH scope issues found (order 10, must be last)
     table_headers_script = 'tools/repair/fix_table_headers.py'
     has_table_fix = any(s['repair_script'] == table_headers_script for s in steps)
     if th_missing > 0 and not has_table_fix:
@@ -580,9 +596,11 @@ def build_plan(failures_path_iter, iter_num):
             'confidence':      'CONFIRMED',
             'notes':           f'Injected: {th_missing} TH cells missing Scope. MUST RUN LAST.'
         })
-        steps.sort(key=lambda s: (s.get('run_last', False), s.get('repair_order', 99)))
-        for i, s in enumerate(steps, 1):
-            s['step'] = i
+
+    # Sort: run_last=True always last, otherwise ascending repair_order
+    steps.sort(key=lambda s: (s.get('run_last', False), s.get('repair_order', 99)))
+    for i, s in enumerate(steps, 1):
+        s['step'] = i
 
     return steps, manual_esc, unknown
 

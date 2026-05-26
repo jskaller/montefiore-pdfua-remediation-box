@@ -339,7 +339,28 @@ if pdfplumber_ran:
 # Result
 # ---------------------------------------------------------------------------
 
-result = 'PASS' if not issues else 'FAIL'
+# Classify issues by type so we can distinguish fixable struct failures
+# from manual-only gaps (untagged visual tables).
+#
+# PASS            — no issues at all
+# REVIEW_REQUIRED — untagged visual tables detected but th_missing_scope == 0
+#                   and no other struct issues; veraPDF may still pass, but
+#                   tables need manual tagging before full compliance.
+# FAIL            — TH cells missing Scope, or other struct tree failures
+#                   that repair scripts can address.
+
+th_scope_issues    = [i for i in issues if i.get('type') == 'TH_missing_scope']
+untagged_issues    = [i for i in issues if i.get('type') == 'untagged_tables_detected']
+other_issues       = [i for i in issues
+                      if i.get('type') not in ('TH_missing_scope', 'untagged_tables_detected')]
+
+if not issues:
+    result = 'PASS'
+elif th_scope_issues or other_issues:
+    result = 'FAIL'
+else:
+    # Only untagged_tables_detected issues — manual gap, not an auto-repair failure
+    result = 'REVIEW_REQUIRED'
 
 output_obj = {
     'pdf':                      pdf_path,
@@ -366,4 +387,4 @@ print(output)
 if args.out:
     Path(args.out).write_text(output)
 
-sys.exit(0 if result == 'PASS' else 1)
+sys.exit(0 if result in ('PASS', 'REVIEW_REQUIRED') else 1)
