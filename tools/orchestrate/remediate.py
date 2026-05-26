@@ -318,7 +318,7 @@ emit('AUDIT', 'metadata_parity', get_result(meta_pre))
 emit('AUDIT', 'preservation', 'RUNNING')
 rc, out, _ = run(
     ['python3', TOOLS/'qa'/'preservation_audit.py',
-     '--source', PASS0, '--output', PASS0,
+     PASS0, PASS0,
      '--out', AUDIT_DIR/'preservation_pre.json'],
     'preservation'
 )
@@ -691,7 +691,7 @@ emit('VALIDATE', 'table_semantics_post', table_post_result)
 emit('VALIDATE', 'preservation_post', 'RUNNING')
 rc, out, _ = run(
     ['python3', TOOLS/'qa'/'preservation_audit.py',
-     '--source', PASS0, '--output', FINAL_PDF,
+     PASS0, FINAL_PDF,
      '--out', AUDIT_DIR/'preservation_post.json'],
     'preservation_post'
 )
@@ -712,8 +712,7 @@ emit('VALIDATE', 'preservation_post', pres_post_result)
 emit('QA', 'render_compare', 'RUNNING')
 rc, out, _ = run(
     ['python3', TOOLS/'qa'/'render_compare.py',
-     '--before', PASS0, '--after', FINAL_PDF,
-     '--output', QA_DIR,
+     PASS0, FINAL_PDF, QA_DIR,
      '--out', AUDIT_DIR/'render_compare.json'],
     'render_compare'
 )
@@ -725,8 +724,8 @@ emit('QA', 'render_compare', rc_result)
 # 7b. Visual QA
 emit('QA', 'visual_qa', 'RUNNING')
 rc, out, _ = run(
-    ['python3', TOOLS/'qa'/'visual_qa.py', FINAL_PDF,
-     '--output', QA_DIR,
+    ['python3', TOOLS/'qa'/'visual_qa.py',
+     FINAL_PDF, QA_DIR,
      '--out', AUDIT_DIR/'visual_qa.json'],
     'visual_qa'
 )
