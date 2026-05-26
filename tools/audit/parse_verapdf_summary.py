@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
 parse_verapdf_summary.py
-Parses one or more veraPDF XML output files (Arlington profile format)
-and produces a concise JSON summary of failures grouped by rule ID,
-suitable for driving the repair pipeline via lookup_repair_plan.py.
+Parses one or more veraPDF XML output files and produces a concise JSON
+summary of failures grouped by rule ID, suitable for driving the repair
+pipeline via lookup_repair_plan.py.
 
-Handles the Arlington veraPDF XML schema:
-  report > jobs > job > arlingtonReport > details > rule
+Supports both veraPDF schemas:
+  Arlington:  report > jobs > job > arlingtonReport  > details > rule[@deviations]
+  Greenfield: report > jobs > job > validationReport > details > rule[@failedChecks]
+
+Both schemas share the same inner <rule clause="..." status="failed"> structure.
+Greenfield is the standard veraPDF distribution and implements the full
+Matterhorn Protocol. Arlington only validates the PDF object model.
 
 Rule IDs are normalized to the form used in rule_repair_map.json:
   "PDF/UA-1/{clause}"   for ISO 14289-1:2014 rules
@@ -98,7 +103,25 @@ for xml_path in sys.argv[1:]:
         root = tree.getroot()
         found = False
 
-        # ── Primary: Arlington schema ─────────────────────────────────────
+        # ── Primary: Greenfield schema (standard veraPDF) ─────────────────
+        # validationReport > details > rule[@failedChecks > 0]
+        for report in iter_tag(root, 'validationReport'):
+            is_compliant = report.get('isCompliant', 'true').lower()
+            if is_compliant == 'true':
+                found = True
+                continue
+            for details in iter_tag(report, 'details'):
+                for rule in iter_tag(details, 'rule'):
+                    failed = int(rule.get('failedChecks', 0))
+                    if failed > 0:
+                        spec   = rule.get('specification', '')
+                        clause = rule.get('clause', '')
+                        desc   = rule.get('description', '')
+                        rule_id = normalise_rule_id(spec, clause)
+                        record(rule_id, clause, spec, desc, failed, xml_path)
+                        found = True
+
+        # ── Secondary: Arlington schema ───────────────────────────────────
         # arlingtonReport > details > rule[@deviations > 0]
         for report in iter_tag(root, 'arlingtonReport'):
             is_compliant = report.get('isCompliant', 'true').lower()
