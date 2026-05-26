@@ -153,179 +153,88 @@ files at the end: the remediated PDF and the audit report.
 
 ---
 
-## Gate sequence
+## Starting a remediation job
 
-Every remediation job must pass these gates in order:
+Every job starts with a single command. The orchestrator handles all
+pre-flight, audit, repair, validation, QA, and packaging automatically.
+The agent only needs to provide document-specific metadata.
 
-### Pre-flight (before any repair)
-0a. `detect_image_only_pages.py` — if OCR_REQUIRED: run OCR per OCR_REMEDIATION_RULE, then restart gate sequence on OCR output
-0b. `run_qpdf_check.sh` — structural integrity (hard stop on FAIL)
+**Step 1: Derive metadata from the document**
 
-### Audit gates
-1. `run_verapdf_profiles.sh` — PDF/UA-1 + WCAG-2-2-Machine baseline
+Before running the orchestrator, read the source PDF and derive:
+- `--title`: the main visible heading. Not a footer or filename.
+- `--subject`: one sentence describing the document's purpose.
+- `--keywords`: 4-8 comma-separated terms covering topic, department, form ID.
 
-   Save pre-repair XML with explicit names — these are required for repair plan lookup:
-   ```bash
-   bash tools/audit/run_verapdf_profiles.sh "$JOB/repair/pass0_source.pdf" "$JOB/audit"
-   # Immediately rename to pre-repair filenames before any repairs run:
-   cp "$JOB/audit/verapdf_pdfua_ua1.xml"       "$JOB/audit/verapdf_pre_pdfua1.xml"
-   cp "$JOB/audit/verapdf_wcag_2_2_machine.xml" "$JOB/audit/verapdf_pre_wcag.xml"
-   ```
-   (hard stop on FAIL — repair then re-run until PASS)
-
-2. `metadata_xmp_parity_audit.py` — metadata parity
-   - Run at Gate 2 to detect issues; repair with `fix_metadata_xmp_parity.py`
-     if it fails, then re-run to confirm PASS before continuing.
-   - Run again after ALL repairs are complete and before packaging to
-     verify no subsequent repair step has corrupted metadata.
-   - Both passes must return PASS. Do not proceed to packaging until the
-     post-repair pass returns PASS.
-   - Do not assume metadata is correct because you set it earlier — always
-     verify with the audit script.
-
-3. `preservation_audit.py` — native text preserved (hard stop on FAIL)
-4. `table_semantics_audit.py` — struct tree + visual table cross-check
-5. `contrast_audit.py` — WCAG 1.4.3 contrast
-
-### Repair plan lookup (before any repair)
-
-After the baseline veraPDF audit, always run:
-
+Use PyMuPDF (fitz) — it is always available:
 ```bash
-# Parse pre-repair veraPDF XML into structured failures
-python3 tools/audit/parse_verapdf_summary.py \
-  $JOB/audit/verapdf_pre_pdfua1.xml \
-  $JOB/audit/verapdf_pre_wcag.xml \
-  > $JOB/audit/failures.json
-
-# Look up the ordered repair plan
-python3 tools/audit/lookup_repair_plan.py \
-  $JOB/audit/failures.json \
-  --map tools/audit/rule_repair_map.json > $JOB/audit/repair_plan.json
+python3 -c "
+import fitz
+doc = fitz.open('/app/workspace/input/{TICKET}/{basename}.pdf')
+for page in doc: print(page.get_text())
+"
 ```
 
-`repair_plan.json` is the starting point for repair decisions — not an
-unconditional instruction set. Use it to avoid reasoning from scratch on
-known patterns. Override it when audit evidence requires.
-
-#### Executing each repair step
-
-For each `repair_step` in `repair_plan.json`, in order:
-
-1. Execute the repair script
-2. Re-run veraPDF on the output
-3. **If the addressed rule now passes** → continue to next step. No logging needed — expected outcome.
-4. **If the addressed rule still fails** → stop. Reason from AGENTS.md. Try an alternative approach.
-   → Log to STATUS.json: rule ID, script tried, why it failed, what was tried instead, outcome.
-5. **If a new rule failure appears** not in the original plan → treat as `unknown_rule`.
-   → Reason from AGENTS.md. Log to STATUS.json: rule ID, reasoning, script used, outcome.
-
-#### What to log in STATUS.json
-
-| Event | Log? |
-|-------|------|
-| Rule in map → script ran → veraPDF passes | **No** — expected, map is correct |
-| Rule in map → script ran → veraPDF still fails | **Yes** — map entry may be wrong |
-| Rule not in map → agent reasoned → veraPDF passes | **Yes** — candidate for map update |
-| Rule not in map → agent reasoned → veraPDF still fails | **Yes** — escalate, manual review |
-
-Only deviations from expected outcomes are logged. Successful known-pattern
-repairs are not noise worth capturing — the map already encodes that they work.
-
-#### Manual escalations
-
-For any entry in `manual_escalations`: set job result to REVIEW_REQUIRED
-or FAIL, document in STATUS.json, do not attempt auto-repair.
-
-### Repair (as needed per repair_plan.json)
-
-**Repair order is critical — struct tree repairs must run last.**
-
-Apply repairs in this order:
-1. `fix_pdfua_identifier.py` — metadata only, safe to run first
-2. `fix_metadata_xmp_parity.py` — metadata only, safe to run early
-
-   **Before calling this script**, read the document content and derive:
-   - `--title`: the main visible heading of the document. Not a footer,
-     filename, or application name. If multiple headings exist, use the
-     primary document title.
-   - `--subject`: one sentence describing what the document is and its
-     purpose (e.g. "Instructions for completing Montefiore's Authorization
-     for Release of Health Information form").
-   - `--keywords`: 4-8 comma-separated terms covering the topic,
-     department, form number, and relevant clinical or administrative
-     context (e.g. "Montefiore, ROI, Authorization, Release of Health
-     Information, HIPAA, Form Instructions").
-
-   Pass all three as explicit arguments — do not rely on source PDF
-   metadata values, which are frequently wrong, empty, or artifacts.
-   The script will fail with MISSING_REQUIRED_ARGS if these cannot be
-   determined — that is a hard stop. Read the document and re-run.
-3. `fix_notdef_glyphs.py` — font-level, no struct tree impact
-4. `fix_contrast_color_runs.py` — content streams, no struct tree impact
-5. `fix_figure_alt_text.py --alt-map` — struct tree Alt attributes
-   (requires human-approved alt_map_approved.json — see alt text pipeline)
-6. `fix_link_annotation_descriptions.py` — annotations
-7. `fix_list_numbering.py` — struct tree L attributes
-8. `fix_parent_tree_mcids.py` — struct tree ParentTree (if needed)
-9. `fix_cidset.py` — **MUST run AFTER all PyMuPDF saves**
-   PyMuPDF's garbage=4 rewrite regenerates font descriptors and can restore
-   CIDSet entries removed earlier in the pipeline. Running fix_cidset after
-   all PyMuPDF-based repairs ensures the removal is not undone.
-10. `fix_table_headers.py` — **MUST RUN LAST among repair scripts**
-    TH Scope attributes reference xrefs that can be invalidated by
-    subsequent saves or pikepdf operations. Running this last ensures
-    the xrefs are stable when Scope is written.
-
-After ALL repairs are complete, run the post-repair metadata audit,
-then QA gates. Never run fix_table_headers.py before pikepdf operations
-or multiple saves.
-
-### QA gates (after all repairs)
-6. `render_compare.py` — visual diff source vs output
-7. `visual_qa.py` (VISION_MODEL) — qualitative visual check on changed pages
-
-### Packaging
-8. `status_json_writer.py` — assemble STATUS.json
+**Step 2: Run the orchestrator**
 
 ```bash
-python3 tools/packaging/status_json_writer.py "$JOB"
+python3 tools/orchestrate/remediate.py \
+  /app/workspace \
+  {TICKET} \
+  "{basename}" \
+  --title    "Document Title" \
+  --subject  "One sentence subject" \
+  --keywords "keyword1, keyword2, ..."
 ```
 
-The script scans `$JOB/audit/`, `$JOB/repair/`, `$JOB/qa/`, and `$JOB/reports/`
-for all JSON result files. Run this after all audit gates have completed.
+The orchestrator streams JSON progress lines. Monitor for `DEVIATION` lines —
+these are the only steps requiring agent reasoning.
 
-9. `checksums.py` — SHA256 verification (optional, package_deliverables also generates checksums)
+**Step 3: Handle deviations**
 
-10. `package_deliverables.py` — promote final PDF and audit report to output/
+The orchestrator surfaces three signal layers:
 
-```bash
-python3 tools/packaging/package_deliverables.py \
-  "$JOB" \
-  "<path-to-final-repaired-pdf>" \
-  --output-dir "$OUT" \
-  --source-pdf "workspace/input/{TICKET}/{basename}.pdf"
+| Layer | Meaning | Agent action |
+|-------|---------|--------------|
+| 1 | Script failed, file missing, exit code wrong | Diagnose and fix the execution error |
+| 2 | Script ran but rule still fails post-repair | Reason about why — map entry may be wrong |
+| 3 | Novel failure, plan insufficient for this document | Full reasoning, document in STATUS.json |
+
+For Layer 1 and 2 deviations, the orchestrator pauses and outputs:
+```json
+{"phase": "DEVIATION", "layer": 1, "step": "...", "expected": "...", "actual": "...", "context": "..."}
 ```
 
-This places exactly two files in `$OUT`:
-  - `{basename}_remediated.pdf`
-  - `{basename}_AUDIT_REPORT.md`
-  - `SHA256SUMS.txt`
+Reason from the context provided. Try an alternative approach. Document
+outcome in STATUS.json. Never re-run the orchestrator from scratch for a
+single deviation — address it and continue.
 
-The full internal package (reports, QA, logs, checksums) remains in `$JOB`.
+**Step 4: Final check**
 
-11. `post_job_indexer.py` — update rule_repair_map.json with confirmed outcomes
+When the orchestrator outputs `"phase": "COMPLETE"`, verify:
+- `result` is `PASS` or `REVIEW_REQUIRED`
+- Deliverables exist in `output/{TICKET}_remediated/`
+- No unresolved Layer 2 deviations
 
-```bash
-python3 tools/audit/post_job_indexer.py \
-  "$JOB" \
-  --map tools/audit/rule_repair_map.json
+---
+
+## Gate sequence (handled automatically by orchestrator)
+
+For reference — the orchestrator runs these in order without agent involvement:
+
+```
+Phase 0: Setup        — scaffold, copy source
+Phase 1: Pre-flight   — OCR detection, qpdf check
+Phase 2: Audit        — veraPDF baseline, metadata, preservation, table, contrast
+Phase 3: Plan         — parse failures, lookup repair plan, inject table headers
+Phase 4: Alt text     — determine Branch A or B
+Phase 5: Repair       — execute repair steps in plan order
+Phase 6: Validate     — veraPDF post, metadata post, table post, preservation post
+Phase 7: QA           — render compare, visual QA
+Phase 8: Package      — STATUS.json, deliverables, knowledge update
 ```
 
-This step is mandatory. It closes the learning loop — confirmed rule/fix
-pairs increment their confidence, deviations are logged, and new rule IDs
-are added as EXPECTED for future jobs. Without this step the repair plan
-lookup stays static and never improves.
+---
 
 ---
 
