@@ -513,7 +513,14 @@ for page_num, page in enumerate(pdf.pages):
             tags_created['L'] = tags_created.get('L', 0) + 1
         elif tag == 'Figure':
             fig = make_elem(current_sect, 'Figure', page_obj)
-            fig['/Alt'] = String('[Figure - alt text required]')
+            # Intentionally set /Alt to empty string. Per ALT_TEXT_RULE.md,
+            # the placeholder "[Figure N — alt text required]" is supposed to
+            # be set by fix_figure_alt_text.py auto mode, NOT by this script.
+            # Empty /Alt causes veraPDF 7.3 to fire, which triggers the
+            # alt text repair pipeline (drafts → review → manual mode).
+            # If we set a placeholder here, veraPDF accepts it as non-empty
+            # and the alt text path never runs.
+            fig['/Alt'] = String('')
             fig['/K'] = Array([Integer(mcid_val)])
             page_mcid_map[mcid_val] = fig
             tags_created['Figure'] = tags_created.get('Figure', 0) + 1
