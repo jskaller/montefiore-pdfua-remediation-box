@@ -10,7 +10,7 @@
       "EXPECTED": "Correct per ISO 14289-1 spec + veraPDF rule definitions \u2014 not yet confirmed on a Montefiore job",
       "MANUAL": "Cannot be auto-repaired \u2014 requires human intervention or Acrobat Pro"
     },
-    "repair_order_note": "repair_order matches the mandatory sequence in AGENTS.md. Always apply repairs in ascending order. fix_table_headers.py (order 10) MUST be last \u2014 no saves may occur after it.",
+    "repair_order_note": "repair_order matches the mandatory sequence in AGENTS.md. Always apply repairs in ascending order. fix_table_headers.py (order 10) MUST be last \u2014 no saves may occur after it. fix_table_tagging.py (order 9) MUST run before fix_table_headers.py.",
     "confirmed_jobs": 3,
     "last_updated": "2026-05-26"
   },
@@ -368,6 +368,18 @@
       "confidence": "EXPECTED",
       "confirmed_jobs": 0,
       "notes": "WCAG mirror of PDF/UA-1/7.3-1. Same repair script and human review gate apply."
+    },
+    "table_semantics/untagged_tables": {
+      "clause": "untagged_tables",
+      "description": "Visual tables detected by pdfplumber that have no corresponding Table struct element. Confirmed by vision model before tagging.",
+      "repair_script": "tools/repair/fix_table_tagging.py",
+      "repair_order": 9,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 1,
+      "last_confirmed": "2026-05-26",
+      "notes": "NOT triggered by a veraPDF rule \u2014 injected by remediate.py when table_semantics_audit.py reports untagged_table_pages (after geometry + vision false-positive filtering). Uses pdfplumber for geometric detection, NIM vision model to confirm candidates and identify header rows, then restructures existing MCIDs into Table > TR > TH|TD hierarchy via pikepdf. Must run BEFORE fix_table_headers.py (repair_order 10) which adds Scope to TH cells this script creates. repair_order 9 ensures it runs after fix_cidset.py and before fix_table_headers.py. Confirmed on MM-TEST2: 1 table tagged, 7 false positives rejected, zero new veraPDF failures introduced."
     }
   },
   "manual_escalation_triggers": [

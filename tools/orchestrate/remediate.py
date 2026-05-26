@@ -432,63 +432,8 @@ gate_results['contrast_pre'] = get_result(contrast_pre)
 emit('AUDIT', 'contrast', get_result(contrast_pre))
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PHASE 3 — Repair plan
+# PHASE 3 — removed; plan generation moved inside iterative repair loop
 # ─────────────────────────────────────────────────────────────────────────────
-
-emit('PLAN', 'lookup_repair_plan', 'RUNNING')
-rc, out, _ = run(
-    ['python3', TOOLS/'audit'/'lookup_repair_plan.py',
-     failures_path, '--map', RULE_MAP],
-    'lookup_repair_plan'
-)
-plan_path = AUDIT_DIR / 'repair_plan.json'
-try:
-    plan_data = json.loads(out)
-    plan_path.write_text(json.dumps(plan_data, indent=2))
-except Exception:
-    plan_data = {'result': 'NO_FAILURES', 'repair_steps': [], 'manual_escalations': [], 'unknown_rules': []}
-    plan_path.write_text(json.dumps(plan_data, indent=2))
-
-repair_steps      = plan_data.get('repair_steps', [])
-manual_escalations= plan_data.get('manual_escalations', [])
-unknown_rules     = plan_data.get('unknown_rules', [])
-
-# Inject table headers fix if TH scope issues found and not already in plan
-table_headers_script = 'tools/repair/fix_table_headers.py'
-has_table_fix = any(s['repair_script'] == table_headers_script for s in repair_steps)
-if th_missing > 0 and not has_table_fix:
-    repair_steps.append({
-        'step':            len(repair_steps) + 1,
-        'repair_script':   table_headers_script,
-        'repair_order':    10,
-        'run_last':        True,
-        'args_pattern':    '<input.pdf> <output.pdf>',
-        'rules_addressed': ['table_semantics/TH_missing_scope'],
-        'confidence':      'CONFIRMED',
-        'notes':           f'Injected: {th_missing} TH cells missing Scope. MUST RUN LAST.'
-    })
-    # Re-sort: run_last always last
-    repair_steps.sort(key=lambda s: (s.get('run_last', False), s.get('repair_order', 99)))
-    for i, s in enumerate(repair_steps, 1):
-        s['step'] = i
-
-emit('PLAN', 'lookup_repair_plan', plan_data.get('result', 'UNKNOWN'),
-     data={
-         'repair_steps':       len(repair_steps),
-         'manual_escalations': len(manual_escalations),
-         'unknown_rules':      len(unknown_rules),
-         'th_fix_injected':    th_missing > 0 and not has_table_fix
-     })
-
-# Surface manual escalations and unknown rules to agent immediately
-if manual_escalations:
-    for esc in manual_escalations:
-        emit('PLAN', 'manual_escalation', 'ESCALATE',
-             note=f"{esc['rule_id']}: {esc.get('notes','')}")
-if unknown_rules:
-    for ur in unknown_rules:
-        emit('PLAN', 'unknown_rule', 'AGENT_REASONING_REQUIRED',
-             note=f"{ur['rule_id']}: {ur.get('description','')} ({ur.get('failures',0)} failures)")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PHASE 4 — Alt text check (before repair loop)
@@ -512,69 +457,187 @@ emit('PLAN', 'alt_text_branch', alt_branch,
      note='Branch A: map exists, apply directly. Branch B: generate drafts, auto-approve, apply.')
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PHASE 5 — Repair execution
+# PHASE 5 — Iterative repair loop
+#
+# Each iteration:
+#   1. Run veraPDF (PDF/UA-1 + WCAG only) on current_pdf
+#   2. Check termination conditions (clean / stuck / regression / no-plan /
+#      max-iterations)
+#   3. Build repair plan from current failures
+#   4. Execute repair steps → advance current_pdf
+#
+# Termination states:
+#   PASS        — veraPDF reports zero failures
+#   STUCK       — failing rule set identical to prior iteration (no progress)
+#   REGRESSION  — failure count increased vs prior iteration
+#   NO_PLAN     — remaining rules have no mapped repair script
+#   MAX_ITER    — hit MAX_ITERATIONS without resolving all failures
 # ─────────────────────────────────────────────────────────────────────────────
 
-current_pdf = PASS0
-pass_num    = 1
+MAX_ITERATIONS      = 5
+current_pdf         = PASS0
+pass_num            = 1          # global monotone counter; never resets
+terminal_state      = None
+prior_failing_rules = None       # set of rule_id strings from last iteration
+prior_failure_count = None       # int; used for regression detection
+iteration           = 0
 
-def next_pass(label):
+# Pre-initialize loop-output variables; overwritten on first build_plan call.
+# Guards against NameError in the summary if loop terminates before build_plan
+# is reached (e.g. PASS or REGRESSION on iteration 1).
+repair_steps       = []
+manual_escalations = []
+unknown_rules      = []
+failing_rules      = set()
+failures_data      = {'failures_by_rule': [], 'total_failures': 0}
+
+def next_pass(iter_num, label):
+    """Return next sequential output path, namespaced by iteration."""
     global pass_num
-    p = REPAIR_DIR / f'pass{pass_num}_{label}.pdf'
+    p = REPAIR_DIR / f'pass{iter_num}_{pass_num}_{label}.pdf'
     pass_num += 1
     return p
 
-for step in repair_steps:
-    script  = step['repair_script']
-    rules   = step['rules_addressed']
-    conf    = step['confidence']
-    run_last= step.get('run_last', False)
+def run_verapdf_for_loop(input_pdf, iter_num):
+    """
+    Run the three veraPDF profiles against input_pdf, save XMLs under
+    audit/ with iteration suffix, parse only PDF/UA-1 + WCAG results.
+    Returns (failing_rules: set[str], failures_data: dict, failure_count: int).
+    """
+    rc_v, _, _ = run(
+        ['bash', TOOLS/'audit'/'run_verapdf_profiles.sh',
+         VERAPDF_BIN, PROFILES, input_pdf, AUDIT_DIR],
+        f'verapdf_iter{iter_num}'
+    )
+
+    # Snapshot XMLs with iteration suffix so each pass is preserved
+    for src, dst in [
+        (AUDIT_DIR/'verapdf_pdfua_ua1.xml',
+         AUDIT_DIR/f'verapdf_iter{iter_num}_pdfua1.xml'),
+        (AUDIT_DIR/'verapdf_wcag_2_2_machine.xml',
+         AUDIT_DIR/f'verapdf_iter{iter_num}_wcag.xml'),
+        (AUDIT_DIR/'verapdf_iso32000_tagged.xml',
+         AUDIT_DIR/f'verapdf_iter{iter_num}_iso32000.xml'),
+    ]:
+        if Path(src).exists():
+            shutil.copy2(src, dst)
+
+    # Parse only PDF/UA-1 + WCAG — ISO-32000-1 is not gated in the loop
+    pdfua_xml = AUDIT_DIR / f'verapdf_iter{iter_num}_pdfua1.xml'
+    wcag_xml  = AUDIT_DIR / f'verapdf_iter{iter_num}_wcag.xml'
+
+    rc_p, out_p, _ = run(
+        ['python3', TOOLS/'audit'/'parse_verapdf_summary.py',
+         pdfua_xml, wcag_xml],
+        f'parse_failures_iter{iter_num}'
+    )
+    try:
+        fd = json.loads(out_p)
+    except Exception:
+        fd = {'failures_by_rule': [], 'total_failures': 0}
+
+    failures_path_iter = AUDIT_DIR / f'failures_iter{iter_num}.json'
+    failures_path_iter.write_text(json.dumps(fd, indent=2))
+
+    rules = {f['rule_id'] for f in fd.get('failures_by_rule', [])}
+    count = fd.get('total_failures', 0)
+    return rules, fd, count, failures_path_iter
+
+def build_plan(failures_path_iter, iter_num):
+    """
+    Call lookup_repair_plan.py and inject TH fix if needed.
+    Returns (repair_steps, manual_escalations, unknown_rules).
+    """
+    plan_path_iter = AUDIT_DIR / f'repair_plan_iter{iter_num}.json'
+    rc_l, out_l, _ = run(
+        ['python3', TOOLS/'audit'/'lookup_repair_plan.py',
+         failures_path_iter, '--map', RULE_MAP],
+        f'lookup_repair_plan_iter{iter_num}'
+    )
+    try:
+        pd = json.loads(out_l)
+        plan_path_iter.write_text(json.dumps(pd, indent=2))
+    except Exception:
+        pd = {'result': 'NO_FAILURES', 'repair_steps': [],
+              'manual_escalations': [], 'unknown_rules': []}
+        plan_path_iter.write_text(json.dumps(pd, indent=2))
+
+    steps      = pd.get('repair_steps', [])
+    manual_esc = pd.get('manual_escalations', [])
+    unknown    = pd.get('unknown_rules', [])
+
+    # Inject TH fix if table semantics pre-audit found missing scope
+    table_headers_script = 'tools/repair/fix_table_headers.py'
+    has_table_fix = any(s['repair_script'] == table_headers_script for s in steps)
+    if th_missing > 0 and not has_table_fix:
+        steps.append({
+            'step':            len(steps) + 1,
+            'repair_script':   table_headers_script,
+            'repair_order':    10,
+            'run_last':        True,
+            'args_pattern':    '<input.pdf> <output.pdf>',
+            'rules_addressed': ['table_semantics/TH_missing_scope'],
+            'confidence':      'CONFIRMED',
+            'notes':           f'Injected: {th_missing} TH cells missing Scope. MUST RUN LAST.'
+        })
+        steps.sort(key=lambda s: (s.get('run_last', False), s.get('repair_order', 99)))
+        for i, s in enumerate(steps, 1):
+            s['step'] = i
+
+    return steps, manual_esc, unknown
+
+def execute_repair_step(step, input_pdf, iter_num):
+    """
+    Run a single repair step. Returns output_pdf path on success, or
+    input_pdf if the step failed (so the chain stays valid).
+    Emits deviations and progress lines. Handles alt-text and metadata
+    special cases identically to the original single-pass logic.
+    """
+    script   = step['repair_script']
+    rules    = step['rules_addressed']
+    conf     = step['confidence']
 
     script_path = APP / script
     if not script_path.exists():
         emit_deviation(script, 'script_exists', 'NOT_FOUND',
                        f'Script not found at {script_path}', layer=1)
-        continue
+        return input_pdf
 
     script_label = Path(script).stem
-    output_pdf   = next_pass(script_label)
+    output_pdf   = next_pass(iter_num, script_label)
 
     emit('REPAIR', script_label, 'RUNNING',
-         data={'rules': rules, 'confidence': conf})
+         data={'iteration': iter_num, 'rules': rules, 'confidence': conf})
 
     # ── Special handling: fix_figure_alt_text ────────────────────────────────
     if 'fix_figure_alt_text' in script:
         if alt_branch in ('A_LOCAL', 'A_ASSET'):
-            # Branch A — apply approved map directly
             rc, out, err = run(
-                ['python3', script_path, current_pdf, output_pdf,
+                ['python3', script_path, input_pdf, output_pdf,
                  '--alt-map', ALT_MAP_JOB, '--language', LANGUAGE],
                 script_label
             )
-            # Always generate review HTML so operator can inspect what was applied.
-            # Convert approved map to draft format for the review report generator.
-            review_html  = REPORTS_DIR / 'alt_text_review.html'
-            draft_json   = REPORTS_DIR / 'alt_text_drafts.json'
+            review_html = REPORTS_DIR / 'alt_text_review.html'
+            draft_json  = REPORTS_DIR / 'alt_text_drafts.json'
             try:
                 approved = json.loads(ALT_MAP_JOB.read_text())
-                # Build draft format from approved map
                 draft = {
                     'result': 'PASS',
-                    'pdf': str(current_pdf),
+                    'pdf': str(input_pdf),
                     'model': 'approved_map',
-                    'figures_total': len(approved.get('figures', {})),
+                    'figures_total':   len(approved.get('figures', {})),
                     'figures_drafted': len(approved.get('figures', {})),
                     'figures_skipped': 0,
                     'figures': {
                         idx: {
-                            'figure_index': int(idx),
-                            'page': 1,
-                            'xref': 0,
+                            'figure_index':  int(idx),
+                            'page':          1,
+                            'xref':          0,
                             'alt_text_draft': entry.get('alt_text', ''),
-                            'source': 'approved_map',
-                            'model': 'approved_map',
-                            'instruction': entry.get('instruction'),
-                            'decorative': entry.get('decorative', False),
+                            'source':        'approved_map',
+                            'model':         'approved_map',
+                            'instruction':   entry.get('instruction'),
+                            'decorative':    entry.get('decorative', False),
                         }
                         for idx, entry in approved.get('figures', {}).items()
                     }
@@ -582,7 +645,7 @@ for step in repair_steps:
                 draft_json.write_text(json.dumps(draft, indent=2))
                 run(
                     ['python3', TOOLS/'repair'/'generate_alt_text_review_report.py',
-                     current_pdf,
+                     input_pdf,
                      '--draft', draft_json,
                      '--out', review_html,
                      '--map-out', REPORTS_DIR / 'alt_map_pre_approved.json'],
@@ -594,15 +657,14 @@ for step in repair_steps:
                 emit('REPAIR', f'{script_label}_review_html', 'WARN',
                      note=f'Could not generate review HTML: {e}')
         else:
-            # Branch B — auto mode → drafts → auto-approve → apply
-            auto_pdf     = REPAIR_DIR / f'pass{pass_num}_alt_auto.pdf'
-            auto_json    = AUDIT_DIR  / 'alt_text_auto_output.json'
-            drafts_json  = REPORTS_DIR/ 'alt_text_drafts.json'
-            review_html  = REPORTS_DIR/ 'alt_text_review.html'
+            # Branch B — auto → drafts → auto-approve → apply
+            auto_pdf    = REPAIR_DIR / f'pass{iter_num}_{pass_num}_alt_auto.pdf'
+            auto_json   = AUDIT_DIR  / 'alt_text_auto_output.json'
+            drafts_json = REPORTS_DIR / 'alt_text_drafts.json'
+            review_html = REPORTS_DIR / 'alt_text_review.html'
 
-            # Step B1: auto placeholder
             rc1, out1, _ = run(
-                ['python3', script_path, current_pdf, auto_pdf,
+                ['python3', script_path, input_pdf, auto_pdf,
                  '--language', LANGUAGE],
                 f'{script_label}_auto'
             )
@@ -613,36 +675,25 @@ for step in repair_steps:
             except Exception:
                 pass
 
-            pass_num += 1
-
-            # Step B2: generate drafts (vision model)
             rc2, out2, _ = run(
                 ['python3', TOOLS/'repair'/'generate_alt_text_drafts.py',
                  auto_pdf, '--fix-output', auto_json, '--out', drafts_json],
                 f'{script_label}_drafts'
             )
-
-            # Step B3: generate review report
             rc3, out3, _ = run(
                 ['python3', TOOLS/'repair'/'generate_alt_text_review_report.py',
                  drafts_json, review_html],
                 f'{script_label}_review'
             )
-
-            # Step B4: auto-approve drafts
             if drafts_json.exists():
                 shutil.copy2(drafts_json, ALT_MAP_JOB)
                 emit('REPAIR', f'{script_label}_auto_approve', 'PASS',
-                     note='Drafts auto-approved. Review HTML saved for post-delivery inspection.')
-
-            # Step B5: apply approved map
+                     note='Drafts auto-approved.')
             rc, out, err = run(
                 ['python3', script_path, auto_pdf, output_pdf,
                  '--alt-map', ALT_MAP_JOB, '--language', LANGUAGE],
                 f'{script_label}_manual'
             )
-
-            # Step B6: copy to asset library
             asset_dir = WORKSPACE / 'assets' / 'alt_maps'
             asset_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ALT_MAP_JOB,
@@ -651,7 +702,7 @@ for step in repair_steps:
     # ── Special handling: fix_metadata_xmp_parity ────────────────────────────
     elif 'fix_metadata_xmp_parity' in script:
         rc, out, err = run(
-            ['python3', script_path, current_pdf, output_pdf,
+            ['python3', script_path, input_pdf, output_pdf,
              '--title',    args.title,
              '--subject',  args.subject,
              '--keywords', args.keywords,
@@ -662,17 +713,16 @@ for step in repair_steps:
     # ── All other repair scripts ──────────────────────────────────────────────
     else:
         rc, out, err = run(
-            ['python3', script_path, current_pdf, output_pdf],
+            ['python3', script_path, input_pdf, output_pdf],
             script_label
         )
 
-    # ── Layer 1: execution signal check ──────────────────────────────────────
+    # ── Layer 1: execution signal ─────────────────────────────────────────────
     step_data = None
     try:
         step_data = json.loads(out)
     except Exception:
         pass
-
     step_result = get_result(step_data) if step_data else ('PASS' if rc == 0 else 'ERROR')
 
     if rc != 0 and not is_pass(step_result):
@@ -683,8 +733,7 @@ for step in repair_steps:
             (step_data.get('error', '') if step_data else err[:300]),
             layer=1
         )
-        # Don't advance current_pdf — keep previous for next step
-        continue
+        return input_pdf   # keep chain valid; don't advance
 
     if not output_pdf.exists():
         emit_deviation(
@@ -694,82 +743,160 @@ for step in repair_steps:
             f'Script exited {rc} but did not produce output file',
             layer=1
         )
-        continue
+        return input_pdf
 
     emit('REPAIR', script_label, step_result,
-         data={'rules': rules, 'output': str(output_pdf)})
+         data={'iteration': iter_num, 'rules': rules, 'output': str(output_pdf)})
+    return output_pdf
 
-    current_pdf = output_pdf
+
+# ── Main loop ─────────────────────────────────────────────────────────────────
+
+while iteration < MAX_ITERATIONS:
+    iteration += 1
+    emit('ITERATE', 'start', 'RUNNING', data={'iteration': iteration})
+
+    # Step 1 — validate current state
+    failing_rules, failures_data, failure_count, failures_path_iter = \
+        run_verapdf_for_loop(current_pdf, iteration)
+
+    # Keep a canonical failures.json pointing at the most recent results
+    (AUDIT_DIR / 'failures.json').write_text(
+        json.dumps(failures_data, indent=2))
+
+    # Step 2 — termination checks (order matters)
+
+    # 2a. Clean pass
+    if not failing_rules:
+        terminal_state = 'PASS'
+        emit('ITERATE', 'terminal', terminal_state,
+             data={'iteration': iteration, 'failure_count': 0})
+        break
+
+    # 2b. Regression (more failures than last iteration)
+    if prior_failure_count is not None and failure_count > prior_failure_count:
+        terminal_state = 'REGRESSION'
+        emit('ITERATE', 'terminal', terminal_state,
+             data={
+                 'iteration':      iteration,
+                 'failure_count':  failure_count,
+                 'prior_count':    prior_failure_count,
+                 'delta':          failure_count - prior_failure_count,
+             })
+        # Surface every new/worsened rule as a Layer 2 deviation
+        new_rules = failing_rules - (prior_failing_rules or set())
+        for r in sorted(new_rules):
+            emit_deviation(
+                f'iterate/{r}',
+                'failure count non-increasing',
+                f'regression: {r} appeared or worsened at iteration {iteration}',
+                f'prior_count={prior_failure_count} current_count={failure_count}',
+                layer=2
+            )
+        break
+
+    # 2c. Stuck (same exact rule set, no regression — genuine stall)
+    if failing_rules == prior_failing_rules:
+        terminal_state = 'STUCK'
+        emit('ITERATE', 'terminal', terminal_state,
+             data={
+                 'iteration':     iteration,
+                 'failure_count': failure_count,
+                 'stuck_rules':   sorted(failing_rules),
+             })
+        break
+
+    # Step 3 — build plan from current failures
+    repair_steps, manual_escalations, unknown_rules = \
+        build_plan(failures_path_iter, iteration)
+
+    # On first iteration, surface manual escalations and unknown rules
+    # (was previously done in the now-removed Phase 3)
+    if iteration == 1:
+        for esc in manual_escalations:
+            emit('PLAN', 'manual_escalation', 'ESCALATE',
+                 note=f"{esc['rule_id']}: {esc.get('notes','')}")
+        for ur in unknown_rules:
+            emit('PLAN', 'unknown_rule', 'AGENT_REASONING_REQUIRED',
+                 note=f"{ur['rule_id']}: {ur.get('description','')} ({ur.get('failures',0)} failures)")
+
+    # 2d. No plan (all remaining rules unknown/manual, nothing to run)
+    if not repair_steps:
+        terminal_state = 'NO_PLAN'
+        emit('ITERATE', 'terminal', terminal_state,
+             data={
+                 'iteration':          iteration,
+                 'failure_count':      failure_count,
+                 'unknown_rules':      [r['rule_id'] for r in unknown_rules],
+                 'manual_escalations': [r['rule_id'] for r in manual_escalations],
+             })
+        break
+
+    emit('ITERATE', 'plan_ready', 'RUNNING',
+         data={
+             'iteration':     iteration,
+             'failure_count': failure_count,
+             'prior_count':   prior_failure_count,
+             'repair_steps':  len(repair_steps),
+             'rules_failing': sorted(failing_rules),
+             'rules_cleared': sorted((prior_failing_rules or set()) - failing_rules),
+         })
+
+    # Step 4 — execute repair steps
+    for step in repair_steps:
+        current_pdf = execute_repair_step(step, current_pdf, iteration)
+
+    prior_failing_rules = failing_rules
+    prior_failure_count = failure_count
+
+else:
+    # Exhausted MAX_ITERATIONS without breaking
+    terminal_state = 'MAX_ITER'
+    emit('ITERATE', 'terminal', terminal_state,
+         data={'iteration': iteration, 'failure_count': prior_failure_count})
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PHASE 6 — Post-repair validation
+# PHASE 6 — Post-loop validation gates
+#
+# veraPDF was run inside the loop on every iteration; no second run here.
+# We report the loop's terminal state as the veraPDF gate result and run
+# the remaining four audit gates against the final PDF.
 # ─────────────────────────────────────────────────────────────────────────────
 
 FINAL_PDF = current_pdf
-emit('VALIDATE', 'final_pdf', 'INFO', data={'path': str(FINAL_PDF)})
+emit('VALIDATE', 'final_pdf', 'INFO',
+     data={'path': str(FINAL_PDF), 'terminal_state': terminal_state,
+           'iterations': iteration})
 
-# 6a. Post-repair veraPDF
-emit('VALIDATE', 'verapdf_post', 'RUNNING')
-rc, out, _ = run(
-    ['bash', TOOLS/'audit'/'run_verapdf_profiles.sh',
-     VERAPDF_BIN, PROFILES, FINAL_PDF, AUDIT_DIR],
-    'verapdf_post'
-)
-# Rename post-repair XMLs
-for src, dst in [
-    (AUDIT_DIR/'verapdf_pdfua_ua1.xml',        AUDIT_DIR/'verapdf_post_pdfua1.xml'),
-    (AUDIT_DIR/'verapdf_wcag_2_2_machine.xml',  AUDIT_DIR/'verapdf_post_wcag.xml'),
-]:
-    if Path(src).exists():
-        shutil.copy2(src, dst)
-
-verapdf_post = load_json(AUDIT_DIR/'verapdf_summary.json')
-verapdf_post_result = get_result(verapdf_post)
+# Translate loop terminal_state → verapdf_post gate result
+_TERMINAL_TO_GATE = {
+    'PASS':       'PASS',
+    'STUCK':      'REVIEW_REQUIRED',
+    'REGRESSION': 'FAIL',
+    'NO_PLAN':    'REVIEW_REQUIRED',
+    'MAX_ITER':   'REVIEW_REQUIRED',
+}
+verapdf_post_result = _TERMINAL_TO_GATE.get(terminal_state, 'FAIL')
 gate_results['verapdf_post'] = verapdf_post_result
 
-# Layer 2: parse post-repair failures and check for regressions
-rc2, out2, _ = run(
-    ['python3', TOOLS/'audit'/'parse_verapdf_summary.py',
-     AUDIT_DIR/'verapdf_post_pdfua1.xml',
-     AUDIT_DIR/'verapdf_post_wcag.xml'],
-    'parse_post_failures'
-)
-post_failures_path = AUDIT_DIR / 'failures_post.json'
-try:
-    post_failures = json.loads(out2)
-    post_failures_path.write_text(json.dumps(post_failures, indent=2))
-except Exception:
-    post_failures = {'failures_by_rule': []}
-
-remaining_failures = post_failures.get('failures_by_rule', [])
-
-if remaining_failures:
-    # Layer 2: rules still failing after repair — surface to agent
-    for failure in remaining_failures:
-        rule_id = failure.get('rule_id', 'unknown')
-        # Check if this was in our repair plan
-        planned_rules = [r for s in repair_steps for r in s.get('rules_addressed', [])]
-        if rule_id in planned_rules:
-            # Rule was supposed to be fixed — map entry may be wrong
-            emit_deviation(
-                f'verapdf_post/{rule_id}',
-                'rule passes after mapped repair script',
-                f'rule still failing ({failure.get("failures",0)} failures)',
-                f'Script ran successfully but rule {rule_id} still fails. Map entry may be incorrect.',
-                layer=2
-            )
-        else:
-            # New failure not in original plan
-            emit_deviation(
-                f'verapdf_post/{rule_id}',
-                'no new failures post-repair',
-                f'new failure: {rule_id} ({failure.get("failures",0)} failures)',
-                f'Rule {rule_id} not in original repair plan. Agent reasoning required.',
-                layer=2
-            )
+# Surface any remaining failures as Layer 2 deviations
+remaining_failures = failures_data.get('failures_by_rule', []) \
+    if terminal_state != 'PASS' else []
+for failure in remaining_failures:
+    rule_id = failure.get('rule_id', 'unknown')
+    emit_deviation(
+        f'verapdf_post/{rule_id}',
+        'rule resolved',
+        f'rule still failing ({failure.get("failures", 0)} failures) '
+        f'at loop exit ({terminal_state})',
+        f'Loop terminated with {terminal_state} after {iteration} iteration(s).',
+        layer=2
+    )
 
 emit('VALIDATE', 'verapdf_post', verapdf_post_result,
-     data={'remaining_failures': len(remaining_failures)})
+     data={'terminal_state': terminal_state,
+           'iterations': iteration,
+           'remaining_failures': len(remaining_failures)})
 
 # 6b. Post-repair metadata audit
 emit('VALIDATE', 'metadata_post', 'RUNNING')
@@ -929,9 +1056,11 @@ summary = {
     'gates':         gate_results,
     'deviations':    deviations,
     'duration_secs': round(duration, 1),
-    'repair_steps_executed': len(repair_steps),
-    'unknown_rules': unknown_rules,
-    'manual_escalations': manual_escalations,
+    'iterations':               iteration,
+    'terminal_state':           terminal_state,
+    'repair_steps_executed':    len(repair_steps),
+    'unknown_rules':            unknown_rules,
+    'manual_escalations':       manual_escalations,
 }
 
 print(json.dumps({'phase': 'COMPLETE', 'summary': summary}, indent=2), flush=True)
