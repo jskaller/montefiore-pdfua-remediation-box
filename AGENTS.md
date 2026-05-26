@@ -37,6 +37,34 @@ deliverable paths, and any caveats.
 
 ---
 
+## QUICKSTART — How to run a job
+
+**This is the only thing you need to do for every remediation job:**
+
+1. Extract text from the source PDF using fitz:
+```bash
+python3 -c "import fitz; doc=fitz.open('/app/workspace/input/{TICKET}/{basename}.pdf'); [print(p.get_text()) for p in doc]"
+```
+
+2. Derive title, subject, keywords from the text.
+
+3. Run the orchestrator:
+```bash
+python3 tools/orchestrate/remediate.py \
+  /app/workspace {TICKET} "{basename}" \
+  --title "..." --subject "..." --keywords "..."
+```
+
+4. Watch for `DEVIATION` lines — those are the only steps needing your reasoning.
+
+5. Report the final summary when `"phase": "COMPLETE"` appears.
+
+**Do not run individual audit or repair scripts manually.**
+**Do not follow the old gate sequence.**
+If `tools/orchestrate/remediate.py` is missing, stop and report it.
+
+---
+
 ## Container layout
 
 ```
