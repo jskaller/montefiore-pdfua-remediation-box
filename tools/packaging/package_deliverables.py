@@ -25,7 +25,7 @@ Exit codes:
   0  success
   2  error
 """
-import sys, json, shutil, argparse, hashlib
+import sys, json, shutil, argparse, hashlib, re
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -128,7 +128,14 @@ generated_at  = status.get('generated_at', datetime.now(timezone.utc).isoformat(
 
 # ── Generate AUDIT_REPORT.md ─────────────────────────────────────────────────
 
-basename = pdf_src.stem.replace('_remediated', '').replace('-remediated', '')
+# Derive clean basename from source PDF if provided, otherwise from remediated PDF
+if args.source_pdf:
+    basename = Path(args.source_pdf).stem
+else:
+    # Fallback: strip pass-numbering and _remediated suffix from remediated PDF name
+    basename = pdf_src.stem
+    basename = re.sub(r'^pass\d+_', '', basename)
+    basename = basename.replace('_remediated', '').replace('-remediated', '')
 
 def gate_row(name, display):
     g = gates.get(name, {})
