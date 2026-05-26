@@ -433,11 +433,13 @@ for page_num, page in enumerate(pdf.pages):
             page_mcid_map[mcid] = elem
             tags_created['H'] = tags_created.get('H', 0) + 1
         elif tag == 'L':
-            l_elem = make_elem(current_sect, 'L', page_obj)
-            li = make_elem(l_elem, 'LI', page_obj)
-            make_elem(li, 'LBody', page_obj)
-            l_elem['/K'] = Array([Integer(mcid)])
-            page_mcid_map[mcid] = l_elem
+            # ISO 32000-1 Annex L: /L must not contain content items directly.
+            # Structure: L > LI > LBody > [MCID]
+            l_elem  = make_elem(current_sect, 'L', page_obj)
+            li      = make_elem(l_elem, 'LI', page_obj)
+            lbody   = make_elem(li, 'LBody', page_obj)
+            lbody['/K'] = Array([Integer(mcid)])
+            page_mcid_map[mcid] = lbody
             tags_created['L'] = tags_created.get('L', 0) + 1
         elif tag == 'Figure':
             fig = make_elem(current_sect, 'Figure', page_obj)
