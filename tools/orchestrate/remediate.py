@@ -290,8 +290,33 @@ if _has_struct is False:
 
         if rc_tag == 0 and pass1_tagged.exists():
             emit('PREFLIGHT', 'fix_untagged_pdf', 'FIXED',
-                 note='Basic structure tree generated. Continuing pipeline on tagged output.')
-            PASS0 = pass1_tagged  # Use tagged version as new source for all subsequent steps
+                 note='Basic structure tree generated. Running content marking pass.')
+
+            # Second pass: connect struct tree to content streams via MCIDs
+            marking_fix  = TOOLS / 'repair' / 'fix_struct_content_marking.py'
+            pass2_marked = REPAIR_DIR / 'pass2_fix_struct_content_marking.pdf'
+            pass_num = 3  # next pass number for repair chain
+
+            if marking_fix.exists():
+                rc_mark, out_mark, _ = run(
+                    ['python3', marking_fix, pass1_tagged, pass2_marked,
+                     '--out', AUDIT_DIR / 'fix_struct_content_marking.json'],
+                    'fix_struct_content_marking'
+                )
+                if rc_mark == 0 and pass2_marked.exists():
+                    PASS0 = pass2_marked
+                    emit('PREFLIGHT', 'fix_struct_content_marking', 'FIXED',
+                         note='Content streams marked with MCID tags. ParentTree built.')
+                else:
+                    # Fall back to just the struct tree pass
+                    PASS0 = pass1_tagged
+                    emit('PREFLIGHT', 'fix_struct_content_marking', 'WARN',
+                         note='Content marking failed — using hollow struct tree')
+            else:
+                PASS0 = pass1_tagged
+                emit('PREFLIGHT', 'fix_struct_content_marking', 'WARN',
+                     note='fix_struct_content_marking.py not found — skipped')
+
             gate_results['struct_tree_check'] = 'FIXED'
         else:
             emit_deviation('fix_untagged_pdf', 'FIXED', 'FAIL',

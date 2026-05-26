@@ -66,6 +66,18 @@
       "confirmed_jobs": 1,
       "notes": "Sets Author, Creator, Producer to 'Montefiore Einstein'. Run metadata_xmp_parity_audit.py after to verify. Run again after ALL repairs to confirm no subsequent script corrupted metadata."
     },
+    "PDF/UA-1/7.1-content-unmarked": {
+      "clause": "7.1",
+      "testNumber": "3",
+      "description": "Content is neither marked as Artifact nor tagged as real content",
+      "repair_script": "tools/repair/fix_struct_content_marking.py",
+      "repair_order": 1,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 1,
+      "notes": "Runs after fix_untagged_pdf.py. Wraps BT/ET groups in MCID BDC markers, marks everything else as Artifact, rebuilds ParentTree. Also fixes 7.18.3 Tabs=W by setting Tabs=/S on all pages."
+    },
     "PDF/UA-1/7.1-untagged": {
       "clause": "7.1",
       "description": "Document has no StructTreeRoot \u2014 document is not tagged at all",
