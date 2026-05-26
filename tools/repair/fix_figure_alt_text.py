@@ -2,6 +2,8 @@
 """
 fix_figure_alt_text.py
 Adds or repairs Alt text on Figure structure elements that are missing it.
+Also sets the /Lang attribute on Figure elements to satisfy PDF/UA-1 clause 7.2
+(natural language for text in Alt attribute must be determinable).
 
 Two modes:
   auto:   Sets placeholder alt text so veraPDF passes structurally.
@@ -17,8 +19,8 @@ The manual mode input comes from generate_alt_text_review_report.py.
 Never apply auto placeholder text to a production document.
 
 Usage:
-  fix_figure_alt_text.py <input.pdf> <output.pdf>
-  fix_figure_alt_text.py <input.pdf> <output.pdf> --alt-map alt_map_approved.json
+  fix_figure_alt_text.py <input.pdf> <output.pdf> [--language en-US]
+  fix_figure_alt_text.py <input.pdf> <output.pdf> --alt-map alt_map_approved.json [--language en-US]
 
 Without --alt-map: auto mode (placeholder, needs_review list output).
 With --alt-map:    manual mode (approved text applied, decorative artifacted).
@@ -37,6 +39,8 @@ parser.add_argument('input')
 parser.add_argument('output')
 parser.add_argument('--alt-map', default=None,
                     help='alt_map_approved.json from generate_alt_text_review_report.py')
+parser.add_argument('--language', default='en-US',
+                    help='Language tag to set on Figure struct elements (default: en-US)')
 parser.add_argument('--out', default=None,
                     help='Write JSON result to this file in addition to stdout')
 args = parser.parse_args()
@@ -44,7 +48,7 @@ args = parser.parse_args()
 # ── Load alt map ──────────────────────────────────────────────────────────────
 
 alt_map    = {}
-decorative = set()  # figure indices to artifact
+decorative = set()
 
 if args.alt_map:
     try:
@@ -64,14 +68,14 @@ needs_review = []
 
 # ── Walk struct tree ──────────────────────────────────────────────────────────
 
-catalog          = doc.pdf_catalog()
-struct_tree_ref  = doc.xref_get_key(catalog, 'StructTreeRoot')
+catalog         = doc.pdf_catalog()
+struct_tree_ref = doc.xref_get_key(catalog, 'StructTreeRoot')
 
 if struct_tree_ref[0] == 'null' or not struct_tree_ref[1]:
     result_obj = {
-        'input':   args.input,
-        'result':  'SKIPPED',
-        'reason':  'No StructTreeRoot — document is not tagged'
+        'input':  args.input,
+        'result': 'SKIPPED',
+        'reason': 'No StructTreeRoot — document is not tagged'
     }
     out = json.dumps(result_obj, indent=2)
     print(out)
@@ -80,7 +84,7 @@ if struct_tree_ref[0] == 'null' or not struct_tree_ref[1]:
     sys.exit(1)
 
 def walk_struct(xref, doc):
-    """Recursively walk structure tree, yield (xref, type, alt) for Figure nodes."""
+    """Recursively walk structure tree, yield (xref, type, alt) for all nodes."""
     try:
         s_type = doc.xref_get_key(xref, 'S')
         alt    = doc.xref_get_key(xref, 'Alt')
@@ -111,6 +115,17 @@ def is_placeholder(alt_text: str) -> bool:
         return True
     return False
 
+def set_lang_on_element(xref, doc, language):
+    """Set the /Lang attribute on a structure element for PDF/UA-1 clause 7.2."""
+    try:
+        lang_val = doc.xref_get_key(xref, 'Lang')
+        if lang_val[0] == 'null' or not lang_val[1].strip().strip('()'):
+            doc.xref_set_key(xref, 'Lang', fitz.get_pdf_str(language))
+            return True
+    except Exception:
+        pass
+    return False
+
 struct_root_xref = int(struct_tree_ref[1].split()[0])
 fig_index = 0
 
@@ -122,28 +137,29 @@ for xref, s_type, alt in walk_struct(struct_root_xref, doc):
     idx_str = str(fig_index)
 
     if args.alt_map:
-        # Manual mode — apply approved map
+        # ── Manual mode ───────────────────────────────────────────────────
         if idx_str in decorative:
-            # Mark as artifact — set empty Alt and add Artifact marking
             doc.xref_set_key(xref, 'Alt', fitz.get_pdf_str(''))
+            set_lang_on_element(xref, doc, args.language)
             changes.append({
                 'xref':         xref,
                 'figure_index': fig_index,
                 'mode':         'artifacted',
                 'alt_set':      None,
+                'lang_set':     args.language,
             })
         elif idx_str in alt_map:
             new_alt = alt_map[idx_str]
             doc.xref_set_key(xref, 'Alt', fitz.get_pdf_str(new_alt))
+            lang_set = set_lang_on_element(xref, doc, args.language)
             changes.append({
                 'xref':         xref,
                 'figure_index': fig_index,
                 'mode':         'approved',
                 'alt_set':      new_alt,
+                'lang_set':     args.language if lang_set else 'already_present',
             })
         elif is_placeholder(alt):
-            # Approved map doesn't cover this figure but it still has a placeholder
-            # This should not happen if the review report covered all needs_review figures
             changes.append({
                 'xref':         xref,
                 'figure_index': fig_index,
@@ -151,15 +167,17 @@ for xref, s_type, alt in walk_struct(struct_root_xref, doc):
                 'warning':      'Placeholder alt text remains — figure not in approved map',
             })
     else:
-        # Auto mode — set placeholder for all figures missing meaningful alt text
+        # ── Auto mode ─────────────────────────────────────────────────────
         if is_placeholder(alt):
             new_alt = f'[Figure {fig_index + 1} — alt text required]'
             doc.xref_set_key(xref, 'Alt', fitz.get_pdf_str(new_alt))
+            set_lang_on_element(xref, doc, args.language)
             changes.append({
                 'xref':         xref,
                 'figure_index': fig_index,
                 'mode':         'auto-placeholder',
                 'alt_set':      new_alt,
+                'lang_set':     args.language,
             })
             needs_review.append({
                 'xref':         xref,
@@ -181,18 +199,20 @@ else:
     result  = 'FIXED' if not skipped else 'PARTIAL'
 
 output_obj = {
-    'input':          args.input,
-    'output':         args.output,
-    'result':         result,
-    'mode':           mode,
-    'figures_total':  fig_index,
-    'changes':        changes,
-    'needs_review':   needs_review,
+    'input':         args.input,
+    'output':        args.output,
+    'result':        result,
+    'mode':          mode,
+    'figures_total': fig_index,
+    'language_set':  args.language,
+    'changes':       changes,
+    'needs_review':  needs_review,
     'note': (
         'Placeholder alt text set. Run generate_alt_text_drafts.py then '
         'generate_alt_text_review_report.py before applying approved text.'
         if result == 'NEEDS_REVIEW' else
-        'Approved alt text applied. Verify with veraPDF.' if result == 'FIXED' else ''
+        'Approved alt text and Lang attribute applied. Verify with veraPDF.'
+        if result == 'FIXED' else ''
     )
 }
 

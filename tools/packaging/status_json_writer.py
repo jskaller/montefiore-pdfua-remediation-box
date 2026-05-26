@@ -4,7 +4,20 @@ status_json_writer.py
 Assembles a STATUS.json for a remediation job by collecting results
 from all audit/repair script outputs in a job directory.
 
-Usage: status_json_writer.py <job-dir> [--pdf original.pdf] [--out STATUS.json]
+The job directory has the following structure:
+  jobs/{TICKET}_{basename}/
+    audit/      ← audit JSONs (veraPDF, metadata, contrast, etc.)
+    repair/     ← repair JSONs (fix_* outputs)
+    qa/         ← QA JSONs (preservation, render_compare, visual_qa)
+    reports/    ← alt text drafts, review HTML, alt maps
+
+Usage:
+  status_json_writer.py <job-dir> [--pdf original.pdf] [--out STATUS.json]
+
+Exit codes:
+  0  PASS or REVIEW
+  1  FAIL, INCOMPLETE, or NO_RESULTS
+  2  error
 """
 import sys, json, argparse
 from pathlib import Path
@@ -12,8 +25,8 @@ from datetime import datetime, timezone
 
 parser = argparse.ArgumentParser()
 parser.add_argument('job_dir')
-parser.add_argument('--pdf',  default='')
-parser.add_argument('--out',  default='STATUS.json')
+parser.add_argument('--pdf',  default='', help='Source PDF path for reference')
+parser.add_argument('--out',  default='STATUS.json', help='Output filename (default: STATUS.json)')
 args = parser.parse_args()
 
 job_dir = Path(args.job_dir)
@@ -27,75 +40,95 @@ def load_json(path):
     except Exception:
         return None
 
-# Collect known outputs
 status = {
-    'generated_at':    datetime.now(timezone.utc).isoformat(),
-    'pdf':             args.pdf,
-    'job_dir':         str(job_dir),
-    'overall_result':  'UNKNOWN',
-    'gates': {}
+    'generated_at':   datetime.now(timezone.utc).isoformat(),
+    'pdf':            args.pdf,
+    'job_dir':        str(job_dir),
+    'overall_result': 'UNKNOWN',
+    'gates':          {}
 }
 
+# ── Known gate files — check both root and subdirectories ────────────────────
+# The agent may write JSON files to the root job_dir or to subdirectories
+# depending on how scripts are called. We check both locations.
+
+def find_file(job_dir, *candidates):
+    """Find first existing file from a list of candidate paths."""
+    for c in candidates:
+        p = Path(c) if Path(c).is_absolute() else job_dir / c
+        if p.exists():
+            return p
+    return None
+
 gate_files = {
-    'verapdf_pdfua':        job_dir / 'verapdf_summary.json',
-    'metadata_parity':      job_dir / 'metadata_xmp_parity_audit.json',
-    'preservation':         job_dir / 'preservation_audit.json',
-    'contrast':             job_dir / 'contrast_audit.json',
-    'table_semantics':      job_dir / 'table_semantics_audit.json',
-    'font_inventory':       job_dir / 'font_inventory.json',
-    'qpdf':                 job_dir / 'qpdf_check.json',
-    'visual_qa':            job_dir / 'visual_qa.json',
-    'render_compare':       job_dir / 'render_compare.json',
-    'alt_text':             job_dir / 'fix_figure_alt_text_approved.json',
-    'ocr_detection':        job_dir / 'detect_image_only_pages.json',
+    'verapdf_pdfua':   find_file(job_dir, 'audit/verapdf_summary.json',        'verapdf_summary.json'),
+    'metadata_parity': find_file(job_dir, 'audit/metadata_parity_final.json',   'audit/metadata_xmp_parity_audit.json', 'metadata_xmp_parity_audit.json'),
+    'preservation':    find_file(job_dir, 'qa/preservation_audit.json',          'preservation_audit.json'),
+    'contrast':        find_file(job_dir, 'audit/contrast_final.json',           'audit/contrast_audit.json', 'contrast_audit.json'),
+    'table_semantics': find_file(job_dir, 'audit/table_semantics_final.json',    'audit/table_semantics_audit.json', 'table_semantics_audit.json'),
+    'font_inventory':  find_file(job_dir, 'audit/font_inventory.json',           'font_inventory.json'),
+    'qpdf':            find_file(job_dir, 'audit/qpdf_check.json',               'qpdf_check.json'),
+    'visual_qa':       find_file(job_dir, 'qa/visual_qa.json',                   'visual_qa.json'),
+    'render_compare':  find_file(job_dir, 'qa/render_compare.json',              'render_compare.json'),
+    'alt_text':        find_file(job_dir, 'repair/fix_figure_alt_text.json',     'repair/fix_figure_alt_text_approved.json', 'fix_figure_alt_text_approved.json'),
+    'ocr_detection':   find_file(job_dir, 'audit/detect_image_only_pages.json',  'detect_image_only_pages.json'),
+    'repair_plan':     find_file(job_dir, 'audit/repair_plan.json',              'repair_plan.json'),
+    'parse_summary':   find_file(job_dir, 'audit/failures.json',                 'audit/parse_summary.json'),
 }
 
 all_results = []
 for gate_name, gate_path in gate_files.items():
-    if gate_path.exists():
+    if gate_path and gate_path.exists():
         data = load_json(gate_path)
         if data:
             result = data.get('result', 'UNKNOWN')
             status['gates'][gate_name] = {
                 'result': result,
-                'source': str(gate_path.name)
+                'source': str(gate_path.relative_to(job_dir))
             }
             all_results.append(result)
 
-# Also scan for any additional JSON result files
-for json_file in sorted(job_dir.glob('*.json')):
-    if json_file.name == args.out:
+# ── Scan all subdirectories for additional JSON result files ──────────────────
+
+known_sources = {v.name for v in gate_files.values() if v}
+scan_dirs = [job_dir, job_dir / 'audit', job_dir / 'repair',
+             job_dir / 'qa', job_dir / 'reports']
+
+for scan_dir in scan_dirs:
+    if not scan_dir.exists():
         continue
-    if json_file.name not in [p.name for p in gate_files.values()]:
+    for json_file in sorted(scan_dir.glob('*.json')):
+        if json_file.name == args.out:
+            continue
+        if json_file.name in known_sources:
+            continue
         data = load_json(json_file)
         if data and 'result' in data:
             gate_name = json_file.stem
             if gate_name not in status['gates']:
+                result = data.get('result', 'UNKNOWN')
                 status['gates'][gate_name] = {
-                    'result': data['result'],
-                    'source': json_file.name
+                    'result': result,
+                    'source': str(json_file.relative_to(job_dir))
                 }
-                all_results.append(data['result'])
+                all_results.append(result)
 
-# Normalize results for overall evaluation
-# Many gate scripts return variant success codes beyond 'PASS'. Treat these as PASS:
+# ── Normalize results ─────────────────────────────────────────────────────────
+
 NORMALIZED_PASS = {
-    'PASS',
-    'FIXED',
-    'ALREADY_CORRECT',
-    'PASS_WITH_MIXED_PAGES',
-    'PASS_WITH_ONLY_NATIVE_TEXT',
-    'SKIPPED'
+    'PASS', 'FIXED', 'ALREADY_CORRECT',
+    'PASS_WITH_MIXED_PAGES', 'PASS_WITH_ONLY_NATIVE_TEXT',
+    'SKIPPED', 'OK', 'PLAN_READY', 'NO_FAILURES'
 }
-normalized = [ 'PASS' if r in NORMALIZED_PASS else r for r in all_results ]
 
-# Compute overall
+normalized = ['PASS' if r in NORMALIZED_PASS else r for r in all_results]
+
 if not all_results:
     status['overall_result'] = 'NO_RESULTS'
 elif any(r == 'FAIL' for r in normalized):
     status['overall_result'] = 'FAIL'
 elif any(r in ('REVIEW', 'PARTIAL', 'WARN', 'NEEDS_REVIEW') for r in normalized):
-    status['overall_result'] = 'REVIEW'
+    status['overall_result'] = 'REVIEW_REQUIRED'
 elif all(r == 'PASS' for r in normalized):
     status['overall_result'] = 'PASS'
 else:
@@ -105,4 +138,4 @@ out_path = job_dir / args.out
 out_path.write_text(json.dumps(status, indent=2))
 
 print(json.dumps(status, indent=2))
-sys.exit(0 if status['overall_result'] in ('PASS', 'REVIEW') else 1)
+sys.exit(0 if status['overall_result'] in ('PASS', 'REVIEW_REQUIRED') else 1)
