@@ -105,10 +105,10 @@ If `tools/orchestrate/remediate.py` is missing, stop and report it.
 | Task | Model |
 |------|-------|
 | All audit, repair, packaging decisions | PRIMARY_MODEL (stepfun-ai/step-3.5-flash via NIM) |
-| Visual page comparison, alt text draft generation | VISION_MODEL (nvidia/nemotron-3-nano-omni-reasoning-30b-a3b via NIM) |
+| Visual page comparison, alt text draft generation, table candidate confirmation | VISION_MODEL (nvidia/nemotron-3-nano-omni-reasoning-30b-a3b via NIM) |
 
-Switch to VISION_MODEL before calling `visual_qa.py` or
-`generate_alt_text_drafts.py`. Switch back to PRIMARY_MODEL afterward.
+Switch to VISION_MODEL before calling `visual_qa.py`, `generate_alt_text_drafts.py`,
+or `fix_table_tagging.py`. Switch back to PRIMARY_MODEL afterward.
 
 ---
 
@@ -128,7 +128,7 @@ Switch to VISION_MODEL before calling `visual_qa.py` or
 | OCR pre-flight | `tools/audit/detect_image_only_pages.py` |
 | OCR repair | `ocrmypdf --skip-text -l <lang>` (see OCR_REMEDIATION_RULE) |
 | Alt text pipeline | If `jobs/{job}/reports/alt_map_approved.json` exists → `fix_figure_alt_text.py --alt-map` directly. If not → `generate_alt_text_drafts.py` → `generate_alt_text_review_report.py` → [human review] → `fix_figure_alt_text.py --alt-map` |
-| Table repair | `tools/repair/fix_table_headers.py` |
+| Table repair | `tools/repair/fix_table_tagging.py` (auto-injected; uses VISION_MODEL) → `tools/repair/fix_table_headers.py` (always last) |
 | Metadata repair | `tools/repair/fix_metadata_xmp_parity.py` |
 | Contrast repair | `tools/repair/fix_contrast_color_runs.py` |
 | Preservation QA | `tools/qa/preservation_audit.py` |
@@ -252,15 +252,31 @@ For reference — the orchestrator runs these in order without agent involvement
 
 ```
 Phase 0: Setup        — scaffold, copy source
-Phase 1: Pre-flight   — OCR detection, qpdf check
+Phase 1: Pre-flight   — OCR detection, qpdf check, struct tree check
+                        (auto-runs fix_untagged_pdf + fix_struct_content_marking
+                        if document has no struct tree)
 Phase 2: Audit        — veraPDF baseline, metadata, preservation, table, contrast
-Phase 3: Plan         — parse failures, lookup repair plan, inject table headers
+Phase 3: (removed)    — plan generation now happens inside the iterative loop
 Phase 4: Alt text     — determine Branch A or B
-Phase 5: Repair       — execute repair steps in plan order
-Phase 6: Validate     — veraPDF post, metadata post, table post, preservation post
+Phase 5: Iterative repair loop (up to 5 iterations):
+           Each iteration:
+             a. Run veraPDF (PDF/UA-1 + WCAG only)
+             b. Check termination: PASS / STUCK / REGRESSION / NO_PLAN / MAX_ITER
+             c. Build repair plan from current failures
+                (injects fix_table_tagging at order 9 if untagged tables detected,
+                 injects fix_table_headers at order 10 if TH scope issues found)
+             d. Execute repair steps in plan order
+Phase 6: Validate     — verapdf_post (from loop state), metadata post,
+                        table semantics post, preservation post
 Phase 7: QA           — render compare, visual QA
 Phase 8: Package      — STATUS.json, deliverables, knowledge update
 ```
+
+**ITERATE phase lines** (`{"phase": "ITERATE", ...}`) are normal orchestrator
+output — not errors. Terminal states: `PASS` (clean), `STUCK` (no progress),
+`REGRESSION` (failures increased), `NO_PLAN` (unknown rules), `MAX_ITER`
+(5 iterations without full resolution). Only `PASS` produces an overall
+`PASS` result; all others produce `REVIEW_REQUIRED` or `FAIL`.
 
 ---
 
@@ -380,16 +396,17 @@ not mid-pipeline.
 
 ---
 
-## Repair execution — trust the plan, minimize veraPDF calls
+## Repair execution — trust the plan, let the orchestrator iterate
 
-veraPDF is slow (Java startup + full validation on every call). Minimize runs:
+The orchestrator runs an iterative repair loop (up to 5 iterations). Each
+iteration runs veraPDF, builds a fresh repair plan, executes repairs, then
+checks again. This is by design — do not treat multiple veraPDF runs as an
+error or attempt to suppress them.
 
-- **Pre-repair:** run once, save XML, generate repair plan. That's it.
-- **Post-repair:** run once after ALL repairs are complete.
-- **Mid-repair veraPDF:** only if a repair step returns an unexpected result
-  (script error, PARTIAL, or result that contradicts the plan). Do not run
-  veraPDF after every individual repair script — the repair plan already
-  encodes the expected outcome.
+veraPDF is slow (Java startup + full validation on every call). The orchestrator
+minimizes unnecessary calls by only running inside the loop and stopping
+immediately on a clean pass. Do not add extra veraPDF calls outside the
+orchestrator flow.
 
 If `lookup_repair_plan.py` returns a `PLAN_READY` result, execute all
 `repair_steps` in order without re-consulting AGENTS.md for each one.
