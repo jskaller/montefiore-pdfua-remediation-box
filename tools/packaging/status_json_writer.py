@@ -118,7 +118,7 @@ for scan_dir in scan_dirs:
 NORMALIZED_PASS = {
     'PASS', 'FIXED', 'ALREADY_CORRECT',
     'PASS_WITH_MIXED_PAGES', 'PASS_WITH_ONLY_NATIVE_TEXT',
-    'SKIPPED', 'OK', 'PLAN_READY', 'NO_FAILURES'
+    'SKIPPED', 'OK', 'PLAN_READY', 'NO_FAILURES', 'REVIEW_REQUIRED'
 }
 
 # Exclude pre-repair baseline gates from overall result.
@@ -130,11 +130,22 @@ EXCLUDE_FROM_OVERALL = {
     'failures',         # pre-repair failure list — informational only
 }
 
+def _is_excluded(gate_name):
+    """Return True if this gate should be excluded from the overall result."""
+    if gate_name in EXCLUDE_FROM_OVERALL:
+        return True
+    if gate_name.endswith('_pre'):
+        return True
+    # Exclude iteration-suffixed files produced by the iterative repair loop:
+    #   failures_iter1, repair_plan_iter1, verapdf_iter1_pdfua1, etc.
+    import re
+    if re.search(r'_iter\d+', gate_name):
+        return True
+    return False
+
 final_results = []
 for gate_name, gate_info in status.get('gates', {}).items():
-    if gate_name.endswith('_pre'):
-        continue
-    if gate_name in EXCLUDE_FROM_OVERALL:
+    if _is_excluded(gate_name):
         continue
     r = gate_info.get('result', 'UNKNOWN') if isinstance(gate_info, dict) else gate_info
     final_results.append(r)
