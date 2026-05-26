@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "version": "1.1.0",
+    "version": "1.1.1",
     "standard": "PDF/UA-1 (ISO 14289-1)",
     "purpose": "Maps veraPDF rule IDs to repair scripts. Enables the agent to route directly to the correct fix without reasoning from scratch. Keys match the normalised specification/clause format output by parse_verapdf_summary.py.",
     "key_format": "{normalised_spec}/{clause}  e.g. PDF/UA-1/7.18.6.3",
@@ -24,14 +24,7 @@
       "args_pattern": "<input.pdf> <output.pdf>",
       "confidence": "EXPECTED",
       "confirmed_jobs": 2,
-      "notes": "Top-level conformance clause. Always fixed by setting pdfuaid:part=1, pdfuaid:amd=2005. Run first.",
-      "failure_modes": [
-        {
-          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
-          "date": "2026-05-26",
-          "note": "Script did not resolve rule"
-        }
-      ]
+      "notes": "Top-level conformance clause. Always fixed by setting pdfuaid:part=1, pdfuaid:amd=2005. Run first. Earlier failure mode on MM-TEST2 was caused by broken upstream untagged-PDF script and has been cleared."
     },
     "PDF/UA-1/6.2": {
       "clause": "6.2",
@@ -76,7 +69,8 @@
       "args_pattern": "<input.pdf> <output.pdf>",
       "confidence": "CONFIRMED",
       "confirmed_jobs": 1,
-      "notes": "Runs after fix_untagged_pdf.py. Wraps BT/ET groups in MCID BDC markers, marks everything else as Artifact, rebuilds ParentTree. Also fixes 7.18.3 Tabs=W by setting Tabs=/S on all pages."
+      "last_confirmed": "2026-05-26",
+      "notes": "Pass 2 of the two-script untagged-PDF sequence. Runs after fix_untagged_pdf.py. Verifies and hardens ParentTree connectivity by walking the struct tree, mapping (page, MCID) to struct elements, and rebuilding the ParentTree number tree. Use whenever a PDF has a struct tree but ParentTree is broken or incomplete (Acrobat-tagged PDFs, partial remediations, etc.)."
     },
     "PDF/UA-1/7.1-untagged": {
       "clause": "7.1",
@@ -87,7 +81,8 @@
       "args_pattern": "<input.pdf> <output.pdf>",
       "confidence": "CONFIRMED",
       "confirmed_jobs": 1,
-      "notes": "Auto-generates basic structure tree from text blocks using PyMuPDF. Must run FIRST (repair_order 0) before any other repair. After running, re-run full audit gate sequence to detect remaining failures."
+      "last_confirmed": "2026-05-26",
+      "notes": "Pass 1 of the two-script untagged-PDF sequence. Uses pikepdf.parse_content_stream for token-level content stream manipulation. (1) Classifies blocks via PyMuPDF rawdict; (2) walks content streams tracking BDC/BMC depth; (3) wraps BT/ET groups at depth 0 with /Tag <</MCID N>> BDC ... EMC, reclassifies non-PDF/UA tags (e.g. /PlacedPDF, /OC) as /Artifact, leaves other content as Artifact wrappers; (4) builds Document > Sect+ > H/P/L/Figure struct tree with one Sect per H (satisfies 7.4.4); (5) assigns /StructParents to pages and builds ParentTree; (6) sets /Tabs /S on pages with annotations (satisfies 7.18.3). Run fix_struct_content_marking.py immediately after for ParentTree verification. Must run FIRST (repair_order 0) before any other repair."
     },
     "PDF/UA-1/7.18.5": {
       "clause": "7.18.5",
@@ -98,14 +93,7 @@
       "args_pattern": "<input.pdf> <output.pdf>",
       "confidence": "EXPECTED",
       "confirmed_jobs": 1,
-      "notes": "Links must have Contents key with accessible description. fix_link_annotation_descriptions.py adds Contents to Link annotations missing them.",
-      "failure_modes": [
-        {
-          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
-          "date": "2026-05-26",
-          "note": "Script did not resolve rule"
-        }
-      ]
+      "notes": "Links must have Contents key with accessible description. fix_link_annotation_descriptions.py adds Contents to Link annotations missing them. Note: also requires Link struct elements in the struct tree (testNumber 1) \u2014 future enhancement to fix_untagged_pdf.py should detect Link annotations on a page and create /Link struct elements in the page's Sect."
     },
     "PDF/UA-1/7.18.1": {
       "clause": "7.18.1",
@@ -116,25 +104,19 @@
       "args_pattern": "<input.pdf> <output.pdf>",
       "confidence": "EXPECTED",
       "confirmed_jobs": 0,
-      "notes": "Often co-occurs with 7.18.5. Same repair script addresses both.",
-      "failure_modes": [
-        {
-          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
-          "date": "2026-05-26",
-          "note": "Script did not resolve rule"
-        }
-      ]
+      "notes": "Often co-occurs with 7.18.5. Same repair script addresses both."
     },
     "PDF/UA-1/7.18.3": {
       "clause": "7.18.3",
       "description": "Annotation has non-standard attribute",
-      "repair_script": null,
-      "repair_order": null,
+      "repair_script": "tools/repair/fix_untagged_pdf.py",
+      "repair_order": 0,
       "run_last": false,
-      "args_pattern": null,
-      "confidence": "MANUAL",
-      "confirmed_jobs": 0,
-      "notes": "Non-standard annotation attributes. Flag for manual review."
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 1,
+      "last_confirmed": "2026-05-26",
+      "notes": "Was previously MANUAL. Now fixed automatically by fix_untagged_pdf.py which sets /Tabs /S on every page that has annotations. Resolved on MM-TEST2."
     },
     "PDF/UA-1/7.1": {
       "clause": "7.1",
@@ -145,14 +127,7 @@
       "args_pattern": "<input.pdf> <output.pdf> --title \"...\" --subject \"...\" --keywords \"...\"",
       "confidence": "EXPECTED",
       "confirmed_jobs": 2,
-      "notes": "Arlington profile reports all 7.1.x failures under the parent clause 7.1. Run both fix_pdfua_identifier.py (repair_order 1) and fix_metadata_xmp_parity.py (repair_order 2) when this rule fires \u2014 they together cover Marked, DisplayDocTitle, Lang, and XMP fields. Always pass --title, --subject, --keywords derived from document content.",
-      "failure_modes": [
-        {
-          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
-          "date": "2026-05-26",
-          "note": "Script did not resolve rule"
-        }
-      ]
+      "notes": "Arlington profile reports all 7.1.x failures under the parent clause 7.1. Run both fix_pdfua_identifier.py (repair_order 1) and fix_metadata_xmp_parity.py (repair_order 2) when this rule fires \u2014 they together cover Marked, DisplayDocTitle, Lang, and XMP fields. Always pass --title, --subject, --keywords derived from document content. Previous failure mode on MM-TEST2 (3080 then 654 failures) was caused by broken upstream untagged-PDF script that left content unmarked, NOT by fix_metadata_xmp_parity.py. After fix_untagged_pdf.py + fix_struct_content_marking.py were corrected, only 2 of these failures remain (7.1/9 dc:title, 7.1/10 DisplayDocTitle) which are this script's actual job."
     },
     "PDF/UA-1/7.1-1": {
       "clause": "7.1-1",
@@ -163,7 +138,7 @@
       "args_pattern": "<input.pdf> <output.pdf>",
       "confidence": "EXPECTED",
       "confirmed_jobs": 0,
-      "notes": "Fix sets Marked=true in the document catalog. If the document has no struct tree at all, escalate \u2014 full retagging requires Acrobat Pro or CommonLook."
+      "notes": "Fix sets Marked=true in the document catalog. If the document has no struct tree at all, run fix_untagged_pdf.py first (repair_order 0) which also sets MarkInfo/Marked=true."
     },
     "PDF/UA-1/7.1-2": {
       "clause": "7.1-2",
@@ -174,7 +149,7 @@
       "args_pattern": "<input.pdf> <output.pdf>",
       "confidence": "EXPECTED",
       "confirmed_jobs": 0,
-      "notes": "Lang entry should be set to 'en-US' for English documents unless otherwise specified."
+      "notes": "Lang entry should be set to 'en-US' for English documents unless otherwise specified. fix_untagged_pdf.py also sets /Lang to 'en-US' when generating a new struct tree."
     },
     "PDF/UA-1/7.1-3": {
       "clause": "7.1-3",
@@ -190,13 +165,13 @@
     "PDF/UA-1/7.2-1": {
       "clause": "7.2-1",
       "description": "Real content not tagged \u2014 content outside struct tree",
-      "repair_script": null,
-      "repair_order": null,
+      "repair_script": "tools/repair/fix_untagged_pdf.py",
+      "repair_order": 0,
       "run_last": false,
-      "args_pattern": null,
-      "confidence": "MANUAL",
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "EXPECTED",
       "confirmed_jobs": 0,
-      "notes": "Cannot be auto-repaired. Requires Acrobat Pro or CommonLook to retag untagged content. Set result to FAIL and escalate."
+      "notes": "Was previously MANUAL. fix_untagged_pdf.py now auto-tags untagged native-text PDFs. If document is image-only, still MANUAL (requires OCR first then retagging). Pre-flight OCR detection runs before this script."
     },
     "PDF/UA-1/7.2": {
       "clause": "7.2",
@@ -241,6 +216,18 @@
       "confidence": "EXPECTED",
       "confirmed_jobs": 0,
       "notes": "Same workflow as 7.3-1. Human review gate required."
+    },
+    "PDF/UA-1/7.4.4": {
+      "clause": "7.4.4",
+      "description": "Each node in the tag tree shall contain at most one child H tag",
+      "repair_script": "tools/repair/fix_untagged_pdf.py",
+      "repair_order": 0,
+      "run_last": false,
+      "args_pattern": "<input.pdf> <output.pdf>",
+      "confidence": "CONFIRMED",
+      "confirmed_jobs": 1,
+      "last_confirmed": "2026-05-26",
+      "notes": "fix_untagged_pdf.py creates a new Sect element for each H so that no Sect has more than one H child. Confirmed resolved on MM-TEST2. If document already has a struct tree where multiple H's are siblings, a separate fix_heading_hierarchy.py would be needed (not yet implemented)."
     },
     "PDF/UA-1/7.5-1": {
       "clause": "7.5-1",
@@ -365,7 +352,6 @@
     }
   },
   "manual_escalation_triggers": [
-    "No StructTreeRoot \u2014 document is not tagged",
     "Image-only page detected \u2014 OCR required before any repair",
     "Font not embeddable \u2014 license restriction",
     "Encryption present \u2014 cannot modify document",
