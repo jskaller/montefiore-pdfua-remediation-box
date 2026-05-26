@@ -156,7 +156,7 @@ def make_emc():
 # These should be kept WITH adjacent content (e.g. q before BT, Q after ET)
 # But for simplicity we just artifact anything outside BT/ET at depth 0
 
-def process_instructions(instructions, start_mcid, tag_iter):
+def process_instructions(instructions, start_mcid, tag_iter, xobject_types=None):
     """
     Walk parsed instructions, inject structural markers, return new list.
     
@@ -164,11 +164,19 @@ def process_instructions(instructions, start_mcid, tag_iter):
     - Track marked-content depth from BDC/BMC/EMC instructions
     - At depth 0:
       - BT...ET group: wrap with /Tag <</MCID N>> BDC ... EMC
-      - Anything else (graphics, text positioning outside BT/ET): wrap as Artifact
+      - Do operator referencing an /Image XObject: wrap as Figure BDC ... EMC
+      - Do operator referencing a /Form XObject or unknown: wrap as Artifact
+      - Anything else: wrap as Artifact
     - At depth > 0: pass through untouched (inside existing PlacedPDF/etc)
+    
+    xobject_types: dict mapping xobject name string (e.g. '/Im0') to
+                   'Image' or 'Form'. Built from page Resources before call.
     
     Returns: (new_instructions_list, mcid_count)
     """
+    if xobject_types is None:
+        xobject_types = {}
+
     out = []
     depth = 0
     i = 0
@@ -254,6 +262,23 @@ def process_instructions(instructions, start_mcid, tag_iter):
             # But just in case, pass through
             out.append(instr)
             depth = max(0, depth - 1)
+            i += 1
+            continue
+
+        # ── Bare Do at depth 0 — image or form XObject ────────────────────
+        if op == 'Do' and depth == 0:
+            xobj_name = str(list(instr.operands)[0]) if instr.operands else ''
+            subtype = xobject_types.get(xobj_name, 'Unknown')
+            if subtype == 'Image':
+                # Real bitmap image — wrap as Figure with placeholder Alt
+                flush_artifact()
+                out.append(make_bdc('Figure', mcid))
+                out.append(instr)
+                out.append(make_emc())
+                mcid += 1
+            else:
+                # Form XObject or unknown — treat as Artifact
+                artifact_buf.append(instr)
             i += 1
             continue
         
@@ -376,11 +401,38 @@ for page_num, page in enumerate(pdf.pages):
             continue
         stream_boundaries.append((start, len(all_instructions), stream))
     
-    # Count BT instructions to know how many MCIDs we'll need
+    # Build xobject type map for this page so process_instructions can
+    # distinguish /Image from /Form XObjects at bare Do operators.
+    # Must be built BEFORE bt_count/image_do_count so the image count is accurate.
+    xobject_types = {}
+    try:
+        resources = page_obj.get('/Resources')
+        if resources is not None:
+            xobj_dict = resources.get('/XObject')
+            if xobj_dict is not None:
+                for name, ref in xobj_dict.items():
+                    try:
+                        xobj = pdf.get_object(ref.objgen)
+                        subtype = str(xobj.get('/Subtype', '')).strip('/')
+                        xobject_types['/' + name.lstrip('/')] = subtype
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    # Count BT instructions (text blocks) and image Do operators.
+    # Both consume MCIDs; only BT blocks consume from tag_iter.
     bt_count = sum(1 for instr in all_instructions if str(instr.operator) == 'BT')
-    
-    if bt_count == 0:
-        # No text - mark all streams as Artifact
+    image_do_count = sum(
+        1 for instr in all_instructions
+        if str(instr.operator) == 'Do'
+        and xobject_types.get(
+            str(list(instr.operands)[0]) if instr.operands else '', 'Unknown'
+        ) == 'Image'
+    )
+
+    if bt_count == 0 and image_do_count == 0:
+        # No text or images — mark all streams as Artifact
         for stream in streams:
             try:
                 instrs = pikepdf.parse_content_stream(stream)
@@ -396,14 +448,16 @@ for page_num, page in enumerate(pdf.pages):
     sp_counter += 1
     page_obj['/StructParents'] = Integer(sp)
     
-    # Build tag sequence
+    # Build tag sequence (for text blocks only — image Do operators
+    # are classified as Figure directly, not via tag_iter)
     tag_seq = list(fitz_tags)
     while len(tag_seq) < bt_count:
         tag_seq.append('P')
     tag_iter = iter(tag_seq)
-    
+
     # Process all instructions across page
-    new_all, mcids_on_page = process_instructions(all_instructions, total_mcids, tag_iter)
+    new_all, mcids_on_page = process_instructions(
+        all_instructions, total_mcids, tag_iter, xobject_types)
     
     # Now we need to write new instructions back to streams.
     # Simplest correct approach: write all new instructions into the first stream,
@@ -419,38 +473,54 @@ for page_num, page in enumerate(pdf.pages):
     if page_obj.get('/Annots') is not None:
         page_obj['/Tabs'] = Name('/S')
     
-    # Create struct elements
-    used_tags = tag_seq[:mcids_on_page]
+    # Reconstruct the actual tag sequence from the processed instructions.
+    # process_instructions may have injected Figure MCIDs from bare Do operators
+    # that don't appear in tag_seq (which only covers BT/ET text blocks).
+    # Walk new_all to extract the MCID→tag mapping in order.
+    used_tags = []
+    j = 0
+    while j < len(new_all):
+        instr = new_all[j]
+        op = str(instr.operator)
+        if op == 'BDC':
+            ops = list(instr.operands)
+            if len(ops) >= 2:
+                tag_name = str(ops[0]).lstrip('/')
+                props = ops[1]
+                try:
+                    mcid_val = int(props['/MCID'])
+                    used_tags.append((mcid_val, tag_name))
+                except Exception:
+                    pass
+        j += 1
+    used_tags.sort(key=lambda x: x[0])
     page_mcid_map = {}
     current_sect = make_elem(doc_elem, 'Sect', page_obj)
     
-    for i, tag in enumerate(used_tags):
-        mcid = total_mcids + i
+    for mcid_val, tag in used_tags:
         if tag == 'H':
             current_sect = make_elem(doc_elem, 'Sect', page_obj)
             elem = make_elem(current_sect, 'H', page_obj)
-            elem['/K'] = Array([Integer(mcid)])
-            page_mcid_map[mcid] = elem
+            elem['/K'] = Array([Integer(mcid_val)])
+            page_mcid_map[mcid_val] = elem
             tags_created['H'] = tags_created.get('H', 0) + 1
         elif tag == 'L':
-            # ISO 32000-1 Annex L: /L must not contain content items directly.
-            # Structure: L > LI > LBody > [MCID]
             l_elem  = make_elem(current_sect, 'L', page_obj)
             li      = make_elem(l_elem, 'LI', page_obj)
             lbody   = make_elem(li, 'LBody', page_obj)
-            lbody['/K'] = Array([Integer(mcid)])
-            page_mcid_map[mcid] = lbody
+            lbody['/K'] = Array([Integer(mcid_val)])
+            page_mcid_map[mcid_val] = lbody
             tags_created['L'] = tags_created.get('L', 0) + 1
         elif tag == 'Figure':
             fig = make_elem(current_sect, 'Figure', page_obj)
             fig['/Alt'] = String('[Figure - alt text required]')
-            fig['/K'] = Array([Integer(mcid)])
-            page_mcid_map[mcid] = fig
+            fig['/K'] = Array([Integer(mcid_val)])
+            page_mcid_map[mcid_val] = fig
             tags_created['Figure'] = tags_created.get('Figure', 0) + 1
         else:
             elem = make_elem(current_sect, 'P', page_obj)
-            elem['/K'] = Array([Integer(mcid)])
-            page_mcid_map[mcid] = elem
+            elem['/K'] = Array([Integer(mcid_val)])
+            page_mcid_map[mcid_val] = elem
             tags_created['P'] = tags_created.get('P', 0) + 1
     
     page_mcid_base = total_mcids

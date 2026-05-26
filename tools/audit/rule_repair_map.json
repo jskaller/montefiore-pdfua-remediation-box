@@ -94,10 +94,17 @@
       "repair_order": 7,
       "run_last": false,
       "args_pattern": "<input.pdf> <output.pdf>",
-      "confidence": "CONFIRMED",
+      "confidence": "EXPECTED",
       "confirmed_jobs": 1,
       "last_confirmed": "2026-05-26",
-      "notes": "Two-part fix: (a) sets Contents on link annotations missing it, deriving from URI (http(s)/mailto with urldecode); (b) creates /Link struct elements with /OBJR children and registers in ParentTree via /StructParent. Uses pikepdf throughout. The earlier PyMuPDF-based version returned ALREADY_CORRECT without doing anything because page.annots() silently returns 0 annotations after our pikepdf saves."
+      "notes": "Two-part fix: (a) sets Contents on link annotations missing it, deriving from URI (http(s)/mailto with urldecode); (b) creates /Link struct elements with /OBJR children and registers in ParentTree via /StructParent. Uses pikepdf throughout. The earlier PyMuPDF-based version returned ALREADY_CORRECT without doing anything because page.annots() silently returns 0 annotations after our pikepdf saves.",
+      "failure_modes": [
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-26",
+          "note": "Script did not resolve rule"
+        }
+      ]
     },
     "PDF/UA-1/7.18.1": {
       "clause": "7.18.1",

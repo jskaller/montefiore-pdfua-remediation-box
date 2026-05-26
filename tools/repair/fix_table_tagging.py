@@ -472,11 +472,92 @@ def _safe_int(obj):
         return None
 
 
+def collect_objr_to_elem(pdf_pike):
+    """
+    Walk struct tree, find OBJR nodes (object references — typically for
+    annotations). Return dict: annot_StructParent_int → parent_struct_elem.
+
+    OBJR structure: Dictionary(Type=/OBJR, Obj=<annot_ref>, Pg=<page_ref>)
+    The annotation referenced by Obj has /StructParent N, where N is the
+    ParentTree key that should map back to the OBJR's containing struct element.
+    """
+    result = {}  # struct_parent_int → struct_elem
+
+    def walk(obj, parent_elem=None):
+        if not isinstance(obj, pikepdf.Dictionary):
+            try:
+                obj = pdf_pike.get_object(obj.objgen)
+            except Exception:
+                return
+        k = obj.get('/K')
+        if k is None:
+            return
+        process_k(k, obj)
+
+    def process_k(k, parent_elem):
+        if isinstance(k, pikepdf.Array):
+            for item in k:
+                process_k(item, parent_elem)
+        elif isinstance(k, pikepdf.Dictionary):
+            typ = k.get('/Type')
+            if typ is not None and str(typ) == '/OBJR':
+                # Found an OBJR — get the referenced annotation's StructParent
+                annot_ref = k.get('/Obj')
+                if annot_ref is not None:
+                    try:
+                        annot = pdf_pike.get_object(annot_ref.objgen)
+                        sp = annot.get('/StructParent')
+                        if sp is not None:
+                            try:
+                                result[int(sp)] = parent_elem
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+            else:
+                walk(k, parent_elem)
+        else:
+            try:
+                child = pdf_pike.get_object(k.objgen)
+                walk(child, parent_elem)
+            except Exception:
+                pass
+
+    try:
+        sroot = pdf_pike.Root['/StructTreeRoot']
+        top_k = sroot.get('/K')
+        if top_k is None:
+            return result
+        if isinstance(top_k, pikepdf.Array):
+            for child in top_k:
+                try:
+                    walk(pdf_pike.get_object(child.objgen))
+                except Exception:
+                    pass
+        else:
+            try:
+                walk(pdf_pike.get_object(top_k.objgen))
+            except Exception:
+                walk(top_k)
+    except Exception:
+        pass
+
+    return result
+
+
 def build_parent_tree(pdf_pike):
     """
     Rebuild ParentTree from scratch by walking all leaf struct elements
-    and collecting (page_idx, mcid) → elem mappings.
-    Returns updated StructTreeRoot.
+    and collecting BOTH:
+      - (page_idx, mcid) → elem mappings (for content stream MCID references)
+      - annot_StructParent → elem mappings (for annotation OBJR references)
+
+    The ParentTree number tree must contain both kinds of entries:
+      - Per-page entries keyed by /StructParents (an array of struct elems)
+      - Per-annotation entries keyed by /StructParent (a single struct elem)
+
+    Without OBJR preservation, link annotations lose their struct element
+    parent reference and veraPDF 7.18.5 fails.
     """
     sroot = pdf_pike.Root['/StructTreeRoot']
 
@@ -496,29 +577,31 @@ def build_parent_tree(pdf_pike):
             except Exception:
                 pass
 
-    # Collect all leaf mcid mappings fresh
+    # ── Collect MCID-based mappings (content stream items) ────────────────
     mapping = collect_mcid_to_elem(pdf_pike)
-
-    # Group by page
     by_page = defaultdict(dict)  # page_idx → {mcid: elem}
     for (pi, mcid), (elem, pg) in mapping.items():
         by_page[pi][mcid] = elem
 
+    # ── Collect OBJR-based mappings (annotations) ─────────────────────────
+    objr_mapping = collect_objr_to_elem(pdf_pike)  # struct_parent_int → elem
+
+    # Track the max StructParent used so we don't collide with annot keys
+    all_sp_keys = set(page_to_sp.values()) | set(objr_mapping.keys())
+    sp_counter = max(all_sp_keys, default=-1) + 1
+
     # Assign StructParents to pages that don't have one
-    sp_counter = max(page_to_sp.values(), default=-1) + 1
     for pi in sorted(by_page.keys()):
         if pi not in page_to_sp:
             page_to_sp[pi] = sp_counter
             pdf_pike.pages[pi].obj['/StructParents'] = Integer(sp_counter)
             sp_counter += 1
 
-    # Build ParentTree entries
+    # ── Build per-page MCID arrays ────────────────────────────────────────
     pt_entries = {}
     for pi, mcid_map in by_page.items():
         sp = page_to_sp.get(pi)
-        if sp is None:
-            continue
-        if not mcid_map:
+        if sp is None or not mcid_map:
             continue
         max_mcid = max(mcid_map.keys())
         arr = pikepdf.Array([pikepdf.Integer(0)] * (max_mcid + 1))
@@ -529,6 +612,19 @@ def build_parent_tree(pdf_pike):
                 pass
         pt_entries[sp] = arr
 
+    # ── Add OBJR entries (single struct elem per StructParent key) ────────
+    for struct_parent_int, elem in objr_mapping.items():
+        if struct_parent_int in pt_entries:
+            # Collision with a page StructParents key — should not normally happen
+            # since StructParent (annotation) and StructParents (page) use separate
+            # integer spaces, but skip rather than overwrite if it does.
+            continue
+        try:
+            pt_entries[struct_parent_int] = pdf_pike.make_indirect(elem)
+        except Exception:
+            pass
+
+    # ── Emit number tree ──────────────────────────────────────────────────
     nums = pikepdf.Array()
     for key in sorted(pt_entries):
         nums.append(Integer(key))

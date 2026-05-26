@@ -108,6 +108,32 @@ RUN wget -q \
               /tmp/verapdf-install-response.xml \
     && /opt/verapdf/arlington-pdf-model-checker --version
 
+# ── veraPDF 1.30.1 Greenfield (full PDF/UA-1 + WCAG 2.2 validator) ──────────
+# Installs the standard veraPDF Greenfield distribution alongside Arlington.
+# Greenfield implements the complete Matterhorn Protocol (31 checkpoints,
+# 136 failure conditions) including 7.3 (Figure Alt), 7.4 (Headings),
+# 7.5 (Tables), 7.6 (Lists). The Arlington binary only validates the
+# PDF object model (ISO 32000-2) and misses these semantic PDF/UA-1 rules.
+#
+# Both are kept installed. The pipeline uses VERAPDF_GREENFIELD_BIN for
+# compliance validation; Arlington remains available for object-model checks.
+
+ENV VERAPDF_GREENFIELD_BIN=/opt/verapdf-greenfield/verapdf
+
+COPY verapdf-greenfield-install-response.xml /tmp/verapdf-greenfield-install-response.xml
+
+RUN wget -q \
+    "https://software.verapdf.org/rel/1.30/verapdf-greenfield-${VERAPDF_VERSION}-installer.zip" \
+    -O /tmp/verapdf-greenfield-installer.zip \
+    && unzip -q /tmp/verapdf-greenfield-installer.zip -d /tmp/verapdf-greenfield-installer \
+    && java -Djava.awt.headless=true \
+            -jar /tmp/verapdf-greenfield-installer/verapdf-greenfield-${VERAPDF_VERSION}/verapdf-izpack-installer-${VERAPDF_VERSION}.jar \
+            /tmp/verapdf-greenfield-install-response.xml \
+    && rm -rf /tmp/verapdf-greenfield-installer.zip \
+              /tmp/verapdf-greenfield-installer \
+              /tmp/verapdf-greenfield-install-response.xml \
+    && /opt/verapdf-greenfield/verapdf --version
+
 # ── Node.js 24 + OpenClaw ────────────────────────────────────────────────────
 # OpenClaw requires Node.js 22.14+ (24 recommended)
 
@@ -150,6 +176,7 @@ RUN chmod +x /usr/local/bin/docker-init.sh
 # ── Environment variables ─────────────────────────────────────────────────────
 
 ENV VERAPDF_BIN=/opt/verapdf/arlington-pdf-model-checker
+ENV VERAPDF_GREENFIELD_BIN=/opt/verapdf-greenfield/verapdf
 ENV QPDF_BIN=/usr/bin/qpdf
 ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 ENV PYTHONUNBUFFERED=1

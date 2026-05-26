@@ -54,7 +54,7 @@ Exit codes:
   1  FAIL or unresolved DEVIATION
   2  usage/setup error
 """
-import sys, json, subprocess, shutil, argparse, hashlib, re
+import sys, json, subprocess, shutil, argparse, hashlib, re, os
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -79,7 +79,9 @@ LANGUAGE    = args.language
 
 APP         = Path('/app')
 TOOLS       = APP / 'tools'
-VERAPDF_BIN = Path('/opt/verapdf/arlington-pdf-model-checker')
+VERAPDF_BIN = Path(
+    os.environ.get('VERAPDF_GREENFIELD_BIN',
+                   '/opt/verapdf-greenfield/verapdf'))
 PROFILES    = WORKSPACE / 'assets' / 'validation_profiles' / 'veraPDF-validation-profiles-integration'
 RULE_MAP    = TOOLS / 'audit' / 'rule_repair_map.json'
 
