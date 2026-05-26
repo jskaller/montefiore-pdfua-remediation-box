@@ -8,37 +8,23 @@ required by PDF/UA-1 clause 7.1:
   - /ViewerPreferences/DisplayDocTitle = true (7.1.2)
   - /MarkInfo/Marked = true (7.1.3)
 
-Required fixed values (per METADATA_XMP_PARITY_HARD_GATE.md):
-  Author:   Montefiore Einstein
-  Creator:  Montefiore Einstein
-  Producer: Montefiore Einstein
+Required fixed values:
+  Author/Creator/Producer = "Montefiore Einstein"
 
-Descriptive fields — MUST be derived from document content by the agent
-and passed explicitly as arguments:
-  --title       Document title (from the visible document heading)
-  --subject     One-sentence description of document purpose
-  --keywords    Comma-separated keywords, content-specific
-  --description Longer description (optional)
-  --language    Primary language (default: en-US)
-
-PDF/UA-1 identifier (enforced):
-  pdfuaid:part = 1
-  pdfuaid:amd  = 2005
-  pdfuaid:rev  is REMOVED (PDF/UA-2 only)
+Descriptive fields — MUST be derived from document content and passed
+explicitly. The script fails with MISSING_REQUIRED_ARGS if these cannot
+be determined from args or source PDF.
 
 Usage:
   fix_metadata_xmp_parity.py <input.pdf> <output.pdf>
     --title "Document Title"
     --subject "One sentence subject"
     --keywords "keyword1, keyword2, keyword3"
-    [--description "Longer description"]
+    [--description "..."]
     [--language en-US]
     [--out results.json]
 
-Exit codes:
-  0  success
-  1  inadequate metadata — required args missing and source values unusable
-  2  error (file I/O, missing dependency)
+Exit codes: 0=success, 1=missing required args, 2=error
 """
 import sys, json, re, argparse
 from pathlib import Path
@@ -55,7 +41,6 @@ except Exception as e:
     print(json.dumps({'result': 'ERROR', 'error': f'pikepdf unavailable: {e}'}))
     sys.exit(2)
 
-# Values that look like metadata but are footer/artifact text.
 ARTIFACT_PATTERNS = [
     r'^\d+$',
     r'^health information management$',
@@ -72,9 +57,7 @@ def is_meaningful(value, min_words=3):
     for pattern in ARTIFACT_PATTERNS:
         if re.match(pattern, v, re.I):
             return False
-    if len(v.split()) < min_words:
-        return False
-    return True
+    return len(v.split()) >= min_words
 
 parser = argparse.ArgumentParser()
 parser.add_argument('input_pdf')
@@ -95,10 +78,7 @@ try:
     doc = fitz.open(args.input_pdf)
 except Exception as e:
     out = json.dumps({'result': 'ERROR', 'error': f'Could not open PDF: {e}'}, indent=2)
-    print(out)
-    if args.out:
-        Path(args.out).write_text(out)
-    sys.exit(2)
+    print(out); sys.exit(2)
 
 meta     = doc.metadata or {}
 xmp      = doc.get_xml_metadata() or ''
@@ -112,51 +92,30 @@ def resolve_field(arg_value, source_value, field_name, min_words=3, required=Tru
         return arg_value.strip()
     src = re.sub(r'<[^>]+>', '', source_value or '').strip()
     if src and is_meaningful(src, min_words=min_words):
-        warnings.append(
-            f'{field_name}: no --{field_name.lower()} argument provided; '
-            f'using source PDF value "{src}" — verify this is correct'
-        )
+        warnings.append(f'{field_name}: using source PDF value "{src}"')
         return src
-    if required:
-        return None
-    return ''
+    return None if required else ''
 
 title    = resolve_field(args.title,    meta.get('title', ''),    'title',    min_words=3)
 subject  = resolve_field(args.subject,  meta.get('subject', ''),  'subject',  min_words=3)
 keywords = resolve_field(args.keywords, meta.get('keywords', ''), 'keywords', min_words=1)
 
 missing = []
-if not title:
-    missing.append(
-        f'--title: not provided and source PDF title is missing or an artifact '
-        f'("{meta.get("title", "")}")'
-    )
-if not subject:
-    missing.append(
-        f'--subject: not provided and source PDF subject is missing or not meaningful '
-        f'("{meta.get("subject", "")}")'
-    )
-if not keywords:
-    missing.append(
-        '--keywords: not provided and source PDF has no keywords. '
-        'Derive 4-8 comma-separated keywords from document content and pass as --keywords.'
-    )
+if not title:    missing.append(f'--title: missing or artifact ("{meta.get("title","")}")')
+if not subject:  missing.append(f'--subject: missing or not meaningful ("{meta.get("subject","")}")')
+if not keywords: missing.append('--keywords: missing — derive 4-8 terms from document content')
 
 if missing:
     out = json.dumps({
-        'result':  'MISSING_REQUIRED_ARGS',
-        'error':   'Required descriptive metadata could not be determined.',
-        'missing': missing,
+        'result': 'MISSING_REQUIRED_ARGS', 'missing': missing,
         'agent_instruction': (
-            'Before calling this script, read the document and derive: '
-            '(1) --title: the main visible heading, not a footer or filename; '
-            '(2) --subject: one sentence describing the document purpose; '
-            '(3) --keywords: 4-8 comma-separated terms.'
+            'Read the document and pass: (1) --title: main visible heading; '
+            '(2) --subject: one sentence purpose; '
+            '(3) --keywords: 4-8 comma-separated terms'
         )
     }, indent=2)
     print(out)
-    if args.out:
-        Path(args.out).write_text(out)
+    if args.out: Path(args.out).write_text(out)
     sys.exit(1)
 
 description = args.description or ''
@@ -165,13 +124,21 @@ language    = args.language
 # ── XMP helpers ───────────────────────────────────────────────────────────────
 
 def set_xmp_val(tag, value, xmp_str):
+    """Remove ALL existing instances of tag, then insert new value.
+    This prevents duplicates regardless of how many times the script is run
+    or how many pre-existing instances exist in the source XMP.
+    """
+    # Remove all existing instances
+    cleaned = re.sub(
+        rf'\s*<{re.escape(tag)}[^>]*>.*?</{re.escape(tag)}>\s*',
+        '\n', xmp_str, flags=re.S
+    )
+    # Insert single clean instance
     new_tag = f'<{tag}>{value}</{tag}>'
-    if re.search(rf'<{re.escape(tag)}[\s>]', xmp_str):
-        return re.sub(
-            rf'<{re.escape(tag)}[^>]*>.*?</{re.escape(tag)}>',
-            new_tag, xmp_str, flags=re.S
-        )
-    return xmp_str.replace('</rdf:Description>', f'  {new_tag}\n</rdf:Description>', 1)
+    if '</rdf:Description>' in cleaned:
+        return cleaned.replace('</rdf:Description>', f'  {new_tag}\n</rdf:Description>', 1)
+    # Fallback: append before closing rdf:RDF
+    return cleaned.replace('</rdf:RDF>', f'  {new_tag}\n</rdf:RDF>', 1)
 
 def remove_xmp_tag(tag, xmp_str):
     cleaned = re.sub(
@@ -235,28 +202,28 @@ try:
     doc.save(tmp_path, garbage=4, deflate=True)
     doc.close()
 except Exception as e:
+    Path(tmp_path).unlink(missing_ok=True)
     out = json.dumps({'result': 'ERROR', 'error': f'PyMuPDF save failed: {e}'}, indent=2)
     print(out)
-    if args.out:
-        Path(args.out).write_text(out)
+    if args.out: Path(args.out).write_text(out)
     sys.exit(2)
 
 # ── Set catalog-level PDF/UA-1 requirements via pikepdf ──────────────────────
 # PyMuPDF does not expose direct catalog manipulation for these entries.
-# pikepdf is used here specifically because veraPDF identifies these failures
-# and PyMuPDF cannot fix them.
+# Requires pikepdf — approved use per AGENTS.md (PyMuPDF cannot fix these).
 #
 # Sets:
-#   /Lang in document catalog     (PDF/UA-1 clause 7.1.1)
-#   /ViewerPreferences/DisplayDocTitle = true  (PDF/UA-1 clause 7.1.2)
-#   /MarkInfo/Marked = true       (PDF/UA-1 clause 7.1.3)
+#   /Lang (PDF string, not name) — PDF/UA-1 clause 7.1.1
+#   /ViewerPreferences/DisplayDocTitle = true — PDF/UA-1 clause 7.1.2
+#   /MarkInfo/Marked = true — PDF/UA-1 clause 7.1.3
 
 try:
     pdf = pikepdf.open(tmp_path)
 
-    # /Lang
+    # /Lang must be a PDF string (text string), NOT a name object
+    # pikepdf.String produces a PDF string; pikepdf.Name produces /name
     pdf.Root['/Lang'] = pikepdf.String(language)
-    changes.append(f'set catalog /Lang = {language!r}')
+    changes.append(f'set catalog /Lang = "{language}" (text string)')
 
     # /ViewerPreferences/DisplayDocTitle
     if '/ViewerPreferences' not in pdf.Root:
@@ -278,8 +245,7 @@ except Exception as e:
     Path(tmp_path).unlink(missing_ok=True)
     out = json.dumps({'result': 'ERROR', 'error': f'pikepdf catalog update failed: {e}'}, indent=2)
     print(out)
-    if args.out:
-        Path(args.out).write_text(out)
+    if args.out: Path(args.out).write_text(out)
     sys.exit(2)
 
 result = 'FIXED' if changes else 'ALREADY_CORRECT'
@@ -291,25 +257,14 @@ output = json.dumps({
     'changes':  changes,
     'warnings': warnings,
     'metadata_applied': {
-        'author':      FIXED_AUTHOR,
-        'creator':     FIXED_CREATOR,
-        'producer':    FIXED_PRODUCER,
-        'title':       title,
-        'subject':     subject,
-        'keywords':    keywords,
-        'description': description,
-        'language':    language,
-        'catalog_lang':          language,
-        'display_doc_title':     True,
-        'mark_info_marked':      True,
-        'pdfuaid_part':          '1',
-        'pdfuaid_amd':           '2005',
-        'pdfuaid_rev':           'removed',
+        'author': FIXED_AUTHOR, 'creator': FIXED_CREATOR, 'producer': FIXED_PRODUCER,
+        'title': title, 'subject': subject, 'keywords': keywords,
+        'description': description, 'language': language,
+        'catalog_lang': language, 'display_doc_title': True, 'mark_info_marked': True,
+        'pdfuaid_part': '1', 'pdfuaid_amd': '2005', 'pdfuaid_rev': 'removed',
     }
 }, indent=2)
 
 print(output)
-if args.out:
-    Path(args.out).write_text(output)
-
+if args.out: Path(args.out).write_text(output)
 sys.exit(0)

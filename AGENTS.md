@@ -262,13 +262,16 @@ Apply repairs in this order:
    The script will fail with MISSING_REQUIRED_ARGS if these cannot be
    determined — that is a hard stop. Read the document and re-run.
 3. `fix_notdef_glyphs.py` — font-level, no struct tree impact
-4. `fix_cidset.py` — font descriptor only, no struct tree impact
-5. `fix_contrast_color_runs.py` — content streams, no struct tree impact
-6. `fix_figure_alt_text.py --alt-map` — struct tree Alt attributes
+4. `fix_contrast_color_runs.py` — content streams, no struct tree impact
+5. `fix_figure_alt_text.py --alt-map` — struct tree Alt attributes
    (requires human-approved alt_map_approved.json — see alt text pipeline)
-7. `fix_link_annotation_descriptions.py` — annotations
-8. `fix_list_numbering.py` — struct tree L attributes
-9. `fix_parent_tree_mcids.py` — struct tree ParentTree (if needed)
+6. `fix_link_annotation_descriptions.py` — annotations
+7. `fix_list_numbering.py` — struct tree L attributes
+8. `fix_parent_tree_mcids.py` — struct tree ParentTree (if needed)
+9. `fix_cidset.py` — **MUST run AFTER all PyMuPDF saves**
+   PyMuPDF's garbage=4 rewrite regenerates font descriptors and can restore
+   CIDSet entries removed earlier in the pipeline. Running fix_cidset after
+   all PyMuPDF-based repairs ensures the removal is not undone.
 10. `fix_table_headers.py` — **MUST RUN LAST among repair scripts**
     TH Scope attributes reference xrefs that can be invalidated by
     subsequent saves or pikepdf operations. Running this last ensures
@@ -284,8 +287,33 @@ or multiple saves.
 
 ### Packaging
 8. `status_json_writer.py` — assemble STATUS.json
-9. `checksums.py` — SHA256 verification
+
+```bash
+python3 tools/packaging/status_json_writer.py "$JOB"
+```
+
+The script scans `$JOB/audit/`, `$JOB/repair/`, `$JOB/qa/`, and `$JOB/reports/`
+for all JSON result files. Run this after all audit gates have completed.
+
+9. `checksums.py` — SHA256 verification (optional, package_deliverables also generates checksums)
+
 10. `package_deliverables.py` — promote final PDF and audit report to output/
+
+```bash
+python3 tools/packaging/package_deliverables.py \
+  "$JOB" \
+  "<path-to-final-repaired-pdf>" \
+  --output-dir "$OUT" \
+  --source-pdf "workspace/input/{TICKET}/{basename}.pdf"
+```
+
+This places exactly two files in `$OUT`:
+  - `{basename}_remediated.pdf`
+  - `{basename}_AUDIT_REPORT.md`
+  - `SHA256SUMS.txt`
+
+The full internal package (reports, QA, logs, checksums) remains in `$JOB`.
+
 11. `post_job_indexer.py` — update rule_repair_map.json with confirmed outcomes
 
 ```bash
