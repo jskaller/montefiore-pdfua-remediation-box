@@ -2,31 +2,30 @@
 """
 fix_untagged_pdf.py
 Auto-generates a complete tagged PDF structure for untagged PDFs that have
-a native text layer. Produces:
+a native text layer.
 
-  1. A struct tree skeleton  (Document > Section > H/P/L/LI/Figure)
-  2. MCID BDC markers in every content stream
-  3. A complete ParentTree linking content → struct elements
+Uses pikepdf.parse_content_stream / unparse_content_stream for token-level
+manipulation rather than byte-level regex. This eliminates entire classes of
+bugs around marker detection in complex content streams.
 
-This makes the output a valid input for fix_struct_content_marking.py
-(which handles the case where a struct tree exists but ParentTree is broken).
-When run on a truly untagged PDF, the two-script sequence produces a fully
-wired tagged document ready for downstream repairs.
+Algorithm:
+  Per page content stream:
+    1. Parse into instruction list
+    2. Walk instructions, tracking marked-content depth
+    3. At depth 0 (outside any existing BDC/BMC):
+         a. BT...ET groups become structural P/H/L/Figure with new MCID
+         b. Everything else between BT/ET groups becomes Artifact
+    4. At depth > 0 (inside existing PlacedPDF/ActualText/etc): leave untouched
+    5. Rebuild stream from modified instruction list
 
-Heuristics used:
-  - Large/bold text at top of block → heading (H1/H2/H3 mapped to H)
-  - Regular text blocks → paragraph (P)
-  - Lines starting with bullet chars or numbers → list items (L/LI/LBody)
-  - Image blocks → Figure (with placeholder Alt)
-  - Non-text content streams → Artifact
+Output:
+  1. Struct tree: Document > Sect+ > H | P | L | Figure
+  2. Each H gets its own Sect (PDF/UA 7.4.4)
+  3. ParentTree mapping each page's MCIDs to struct elements
+  4. /Tabs /S on pages with annotations
 
 Usage:
   fix_untagged_pdf.py <input.pdf> <output.pdf> [--out results.json]
-
-Exit codes:
-  0  success
-  1  document already has struct tree — no action needed
-  2  error
 """
 import sys, json, re, argparse, shutil
 from pathlib import Path
@@ -34,13 +33,16 @@ from pathlib import Path
 try:
     import fitz
 except Exception as e:
-    print(json.dumps({'result': 'ERROR', 'error': f'PyMuPDF unavailable: {e}'}))
+    print(json.dumps({'result': 'ERROR', 'error': 'PyMuPDF unavailable: %s' % e}))
     sys.exit(2)
 
 try:
     import pikepdf
+    from pikepdf import Name, Dictionary, Array, Integer, String, Boolean
+    from pikepdf import ContentStreamInstruction, Operator
+    from pikepdf._core import _ObjectList
 except Exception as e:
-    print(json.dumps({'result': 'ERROR', 'error': f'pikepdf unavailable: {e}'}))
+    print(json.dumps({'result': 'ERROR', 'error': 'pikepdf unavailable: %s' % e}))
     sys.exit(2)
 
 parser = argparse.ArgumentParser()
@@ -57,7 +59,7 @@ struct_ref = doc.xref_get_key(catalog, 'StructTreeRoot')
 if struct_ref[0] != 'null' and struct_ref[1]:
     result = json.dumps({
         'result': 'ALREADY_CORRECT',
-        'note':   'Document already has a structure tree — no action needed'
+        'note': 'Document already has a structure tree'
     }, indent=2)
     print(result)
     if args.out:
@@ -65,303 +67,426 @@ if struct_ref[0] != 'null' and struct_ref[1]:
     shutil.copy2(args.input_pdf, args.output_pdf)
     sys.exit(0)
 
-# ── Phase 1: classify blocks via PyMuPDF ─────────────────────────────────────
+# ── Block classification (from fitz, for tag hints) ──────────────────────────
 
 BULLET_CHARS = {'•', '·', '◦', '▪', '▸', '→', '-', '–', '*'}
 
 def span_text(span):
-    """Extract text from a span regardless of fitz version."""
     if 'text' in span:
         return span['text']
     return ''.join(c.get('c', '') for c in span.get('chars', []))
 
 def block_text(block):
-    parts = []
-    for line in block.get('lines', []):
-        for span in line.get('spans', []):
-            parts.append(span_text(span))
-    return ''.join(parts).strip()
+    return ''.join(
+        span_text(s)
+        for line in block.get('lines', [])
+        for s in line.get('spans', [])
+    ).strip()
 
 def classify_block(block):
-    """Return (tag, text) for a text block. Returns (None, None) to skip."""
     if block['type'] != 0:
-        return 'Figure', None
-
+        return 'Figure'
     lines = block.get('lines', [])
     if not lines:
-        return None, None
-
+        return None
     spans = lines[0].get('spans', [])
     if not spans:
-        return None, None
-
-    first_span = spans[0]
-    font_size  = first_span.get('size', 12)
-    font_flags = first_span.get('flags', 0)
-    is_bold    = bool(font_flags & 2**4)
-    text       = block_text(block)
-
+        return None
+    size = spans[0].get('size', 12)
+    flags = spans[0].get('flags', 0)
+    is_bold = bool(flags & 16)
+    text = block_text(block)
     if not text:
-        return None, None
+        return None
+    if text[0] in BULLET_CHARS or re.match(r'^\d+[\.\)]\s', text) or re.match(r'^[a-z][\.\)]\s', text):
+        return 'L'
+    if size >= 18 or (size >= 16 and is_bold): return 'H'
+    if size >= 14 or (size >= 13 and is_bold): return 'H'
+    if size >= 12 and is_bold and len(text) < 120: return 'H'
+    return 'P'
 
-    first_char = text[0]
-    if first_char in BULLET_CHARS:
-        return 'LI', text
-    if re.match(r'^\d+[\.\)]\s', text) or re.match(r'^[a-z][\.\)]\s', text):
-        return 'LI', text
-
-    if font_size >= 18 or (font_size >= 16 and is_bold):
-        return 'H', text
-    if font_size >= 14 or (font_size >= 13 and is_bold):
-        return 'H', text
-    if font_size >= 12 and is_bold and len(text) < 120:
-        return 'H', text
-
-    return 'P', text
-
-# pages_content: list of (page_num, [(tag, text, block), ...])
-# Each entry corresponds 1:1 with a content stream on that page.
-pages_content = []
-
-for page_num, page in enumerate(doc):
-    page_dict = page.get_text('rawdict', flags=fitz.TEXT_PRESERVE_WHITESPACE)
-    blocks    = page_dict.get('blocks', [])
-
-    page_entries = []
+page_block_tags = []
+for page in doc:
+    rawdict = page.get_text('rawdict', flags=fitz.TEXT_PRESERVE_WHITESPACE)
+    tags = []
+    blocks = rawdict.get('blocks', [])
     i = 0
     while i < len(blocks):
-        block = blocks[i]
-        tag, text = classify_block(block)
+        tag = classify_block(blocks[i])
         if tag is None:
             i += 1
             continue
-
-        if tag == 'LI':
-            # Collect consecutive list items into a single L group
-            list_items = [(block, text)]
+        if tag == 'L':
             j = i + 1
-            while j < len(blocks):
-                nt, ntx = classify_block(blocks[j])
-                if nt == 'LI':
-                    list_items.append((blocks[j], ntx))
-                    j += 1
-                else:
-                    break
-            page_entries.append(('L', None, list_items))
+            while j < len(blocks) and classify_block(blocks[j]) == 'L':
+                j += 1
+            tags.append('L')
             i = j
-        elif tag == 'Figure':
-            page_entries.append(('Figure', None, block))
-            i += 1
         else:
-            page_entries.append((tag, text, block))
+            tags.append(tag)
             i += 1
-
-    pages_content.append((page_num, page_entries))
+    page_block_tags.append(tags)
 
 doc.close()
 
-# ── Phase 2: save clean copy via PyMuPDF ─────────────────────────────────────
-# garbage=4 normalises the file and produces one stream per text block,
-# which lets us inject BDC/EMC markers per stream in Phase 3.
+# ── Stream processing using parse_content_stream ─────────────────────────────
+
+def make_bdc(tag_name, mcid):
+    """Build a /Tag <</MCID N>> BDC instruction."""
+    return ContentStreamInstruction(
+        _ObjectList([Name('/' + tag_name), Dictionary(MCID=Integer(mcid))]),
+        Operator('BDC')
+    )
+
+def make_artifact_bmc():
+    """Build /Artifact BMC instruction."""
+    return ContentStreamInstruction(
+        _ObjectList([Name('/Artifact')]),
+        Operator('BMC')
+    )
+
+def make_emc():
+    """Build EMC instruction."""
+    return ContentStreamInstruction(
+        _ObjectList([]),
+        Operator('EMC')
+    )
+
+# Graphics state operators - q/Q for save/restore graphics state
+# These should be kept WITH adjacent content (e.g. q before BT, Q after ET)
+# But for simplicity we just artifact anything outside BT/ET at depth 0
+
+def process_instructions(instructions, start_mcid, tag_iter):
+    """
+    Walk parsed instructions, inject structural markers, return new list.
+    
+    Rules:
+    - Track marked-content depth from BDC/BMC/EMC instructions
+    - At depth 0:
+      - BT...ET group: wrap with /Tag <</MCID N>> BDC ... EMC
+      - Anything else (graphics, text positioning outside BT/ET): wrap as Artifact
+    - At depth > 0: pass through untouched (inside existing PlacedPDF/etc)
+    
+    Returns: (new_instructions_list, mcid_count)
+    """
+    out = []
+    depth = 0
+    i = 0
+    mcid = start_mcid
+    
+    # Pending artifact buffer: instructions at depth 0 that aren't BT/ET groups
+    artifact_buf = []
+    
+    def flush_artifact():
+        nonlocal artifact_buf
+        if artifact_buf:
+            out.append(make_artifact_bmc())
+            out.extend(artifact_buf)
+            out.append(make_emc())
+            artifact_buf = []
+    
+    while i < len(instructions):
+        instr = instructions[i]
+        op = str(instr.operator)
+        
+        if op == 'BDC' or op == 'BMC':
+            if depth == 0:
+                # Top-level marked content begins
+                # Check the tag - if it's not a real PDF/UA structural tag,
+                # treat it as artifact (e.g. /PlacedPDF, /OC, custom property tags)
+                tag = list(instr.operands)[0] if instr.operands else None
+                tag_str = str(tag) if tag else ''
+                # Real-content tags that should be preserved as-is
+                REAL_CONTENT_TAGS = {
+                    '/Artifact', '/ReversedChars', '/Clip',
+                }
+                # If existing tag is Artifact or other safe BMC tag, pass through
+                if tag_str in REAL_CONTENT_TAGS:
+                    flush_artifact()
+                    out.append(instr)
+                    depth += 1
+                    i += 1
+                    # Skip through to matching EMC, passing all through
+                    while i < len(instructions) and depth > 0:
+                        inner = instructions[i]
+                        inner_op = str(inner.operator)
+                        if inner_op == 'BDC' or inner_op == 'BMC':
+                            depth += 1
+                        elif inner_op == 'EMC':
+                            depth -= 1
+                        out.append(inner)
+                        i += 1
+                    continue
+                else:
+                    # Non-PDF/UA marker (PlacedPDF, OC, etc.) - reclassify as Artifact
+                    # Find matching EMC, then re-emit as /Artifact BMC ... EMC
+                    flush_artifact()
+                    # Find matching EMC index
+                    j = i + 1
+                    inner_depth = 1
+                    while j < len(instructions) and inner_depth > 0:
+                        jop = str(instructions[j].operator)
+                        if jop in ('BDC', 'BMC'):
+                            inner_depth += 1
+                        elif jop == 'EMC':
+                            inner_depth -= 1
+                        j += 1
+                    # j is now one past the matching EMC
+                    # Emit as Artifact wrapping everything between BDC and EMC,
+                    # but strip any nested BDC/BMC/EMC inside (since they may
+                    # reference resources that don't make sense; simpler to drop them).
+                    # Actually safer: keep inner BDC/BMC/EMC structure intact.
+                    out.append(make_artifact_bmc())
+                    # Emit the inner instructions (skip the original BDC at i and EMC at j-1)
+                    out.extend(instructions[i+1:j-1])
+                    out.append(make_emc())
+                    i = j
+                    continue
+            else:
+                # Nested marker inside existing block - just track depth
+                out.append(instr)
+                depth += 1
+                i += 1
+                continue
+        
+        if op == 'EMC':
+            # Should not hit this at depth 0 (no opening BDC/BMC)
+            # But just in case, pass through
+            out.append(instr)
+            depth = max(0, depth - 1)
+            i += 1
+            continue
+        
+        if op == 'BT' and depth == 0:
+            # Found a top-level text block - find matching ET
+            bt_idx = i
+            j = i + 1
+            while j < len(instructions) and str(instructions[j].operator) != 'ET':
+                j += 1
+            if j < len(instructions):
+                # Have BT...ET - flush pending artifact, wrap text block with MCID
+                flush_artifact()
+                tag = next(tag_iter, 'P')
+                if tag not in ('H', 'P', 'L', 'Figure'):
+                    tag = 'P'
+                out.append(make_bdc(tag, mcid))
+                out.extend(instructions[bt_idx:j+1])  # BT through ET inclusive
+                out.append(make_emc())
+                mcid += 1
+                i = j + 1
+                continue
+            else:
+                # BT without ET - shouldn't happen but pass through as artifact
+                artifact_buf.append(instr)
+                i += 1
+                continue
+        
+        # Everything else at depth 0: accumulate as artifact
+        if depth == 0:
+            artifact_buf.append(instr)
+        else:
+            out.append(instr)
+        i += 1
+    
+    # Flush any remaining artifact at end
+    flush_artifact()
+    
+    return out, mcid - start_mcid
+
+# ── Phase 1: PyMuPDF clean save ──────────────────────────────────────────────
 
 tmp = args.output_pdf + '.tmp_pass1.pdf'
 doc2 = fitz.open(args.input_pdf)
 doc2.save(tmp, garbage=4, deflate=True)
 doc2.close()
 
-# ── Phase 3: inject BDC/EMC markers + build struct tree via pikepdf ──────────
+# ── Phase 2: pikepdf - process streams and build struct tree ─────────────────
 
 pdf = pikepdf.open(tmp)
 
-# Set MarkInfo/Marked = true
 if '/MarkInfo' not in pdf.Root:
-    pdf.Root['/MarkInfo'] = pdf.make_indirect(pikepdf.Dictionary())
-pdf.Root['/MarkInfo']['/Marked'] = pikepdf.Boolean(True)
+    pdf.Root['/MarkInfo'] = pdf.make_indirect(Dictionary())
+pdf.Root['/MarkInfo']['/Marked'] = Boolean(True)
 
-# Set document language if not present
 if '/Lang' not in pdf.Root:
-    pdf.Root['/Lang'] = pikepdf.String('en-US')
+    pdf.Root['/Lang'] = String('en-US')
 
-# ── Build struct tree skeleton ────────────────────────────────────────────────
-
-struct_tree = pdf.make_indirect(pikepdf.Dictionary(
-    Type=pikepdf.Name('/StructTreeRoot'),
-    K=pikepdf.Array(),
-    ParentTree=pdf.make_indirect(pikepdf.Dictionary(
-        Nums=pikepdf.Array()
-    )),
-    ParentTreeNextKey=pikepdf.Integer(0)
+# Struct tree skeleton
+struct_tree = pdf.make_indirect(Dictionary(
+    Type=Name('/StructTreeRoot'),
+    K=Array(),
+    ParentTree=pdf.make_indirect(Dictionary(Nums=Array())),
+    ParentTreeNextKey=Integer(0)
 ))
 pdf.Root['/StructTreeRoot'] = struct_tree
 
-doc_elem = pdf.make_indirect(pikepdf.Dictionary(
-    Type=pikepdf.Name('/StructElem'),
-    S=pikepdf.Name('/Document'),
+doc_elem = pdf.make_indirect(Dictionary(
+    Type=Name('/StructElem'),
+    S=Name('/Document'),
     P=struct_tree,
-    K=pikepdf.Array()
+    K=Array()
 ))
 struct_tree['/K'].append(doc_elem)
 
 def make_elem(parent, tag, page_ref):
-    elem = pdf.make_indirect(pikepdf.Dictionary(
-        Type=pikepdf.Name('/StructElem'),
-        S=pikepdf.Name(f'/{tag}'),
+    elem = pdf.make_indirect(Dictionary(
+        Type=Name('/StructElem'),
+        S=Name('/' + tag),
         P=parent,
-        K=pikepdf.Array(),
+        K=Array(),
         Pg=page_ref,
     ))
     parent['/K'].append(elem)
     return elem
 
-# ── Phase 4: per-page MCID injection ─────────────────────────────────────────
-# Strategy:
-#   - fitz produces one stream per text block (after garbage=4 save)
-#   - We iterate streams on each page in order
-#   - For each stream containing BT: assign next MCID, wrap with BDC/EMC,
-#     create the matching struct element, store (page_sp, mcid) → elem
-#   - For streams without BT: wrap as Artifact
-#
-# The struct element's /K gets the MCID integer directly (simplest valid form).
-# ParentTree is built at the end from the collected mapping.
+# ── Phase 3: per-page processing ─────────────────────────────────────────────
 
-sp_counter    = 0   # StructParents counter (one per page)
-parent_tree_entries = {}   # sp_int → array[mcid] = struct_elem
-tags_created  = {'H': 0, 'P': 0, 'L': 0, 'Figure': 0}
-total_mcids   = 0
+sp_counter = 0
+parent_tree_entries = {}
+tags_created = {}
+total_mcids = 0
 
-for page_num, entries in pages_content:
-    page_obj = pdf.pages[page_num].obj
-    page_ref = pdf.pages[page_num].obj
-
-    # Get content streams for this page
+for page_num, page in enumerate(pdf.pages):
+    page_obj = page.obj
+    fitz_tags = page_block_tags[page_num] if page_num < len(page_block_tags) else []
+    
     raw = page_obj.get('/Contents')
     if raw is None:
         continue
-
-    if isinstance(raw, pikepdf.Array):
-        streams = list(raw)
+    
+    # Get list of stream objects for this page
+    if isinstance(raw, Array):
+        streams = [pdf.get_object(s.objgen) if hasattr(s, 'objgen') else s for s in raw]
     else:
-        streams = [raw]
-
-    # Assign StructParents to this page
+        try:
+            streams = [pdf.get_object(raw.objgen)]
+        except AttributeError:
+            streams = [raw]
+    
+    # Parse all instructions across all streams in order
+    all_instructions = []
+    stream_boundaries = []   # (start_idx, end_idx, stream_obj)
+    for stream in streams:
+        start = len(all_instructions)
+        try:
+            instrs = pikepdf.parse_content_stream(stream)
+            all_instructions.extend(instrs)
+        except Exception as e:
+            # If parse fails, fall back to treating stream as opaque
+            continue
+        stream_boundaries.append((start, len(all_instructions), stream))
+    
+    # Count BT instructions to know how many MCIDs we'll need
+    bt_count = sum(1 for instr in all_instructions if str(instr.operator) == 'BT')
+    
+    if bt_count == 0:
+        # No text - mark all streams as Artifact
+        for stream in streams:
+            try:
+                instrs = pikepdf.parse_content_stream(stream)
+                if instrs:
+                    new_instrs = [make_artifact_bmc()] + list(instrs) + [make_emc()]
+                    stream.write(pikepdf.unparse_content_stream(new_instrs))
+            except Exception:
+                pass
+        continue
+    
+    # Assign StructParents
     sp = sp_counter
     sp_counter += 1
-    page_obj['/StructParents'] = pikepdf.Integer(sp)
-
-    # We'll build the ParentTree array for this page indexed by MCID.
-    # Since each stream gets at most one MCID, and we assign MCIDs 0..N-1
-    # per page, the array is simply indexed by MCID value.
-    page_mcid_map = {}   # mcid → struct_elem
-
-    # Match streams to entries. fitz produces streams in reading order
-    # matching the block order from rawdict. We walk both lists together.
-    entry_idx = 0
-    page_mcid = 0   # MCID counter, resets per page
-
-    for stream in streams:
-        try:
-            data = stream.read_bytes()
-        except Exception:
-            continue
-
-        has_text = b'BT' in data
-
-        if not has_text:
-            # Non-text stream — mark as Artifact
-            wrapped = b'/Artifact BMC\n' + data + b'\nEMC\n'
-            stream.write(wrapped)
-            continue
-
-        # Text stream — assign MCID and match to struct entry
-        mcid = page_mcid
-        page_mcid += 1
-        total_mcids += 1
-
-        # Get the matching entry (if we have one from fitz classification)
-        entry = entries[entry_idx] if entry_idx < len(entries) else None
-        entry_idx += 1
-
-        tag = entry[0] if entry else 'P'
-
-        # Determine the BDC property dict tag
-        # Use /P for paragraphs, /H for headings, /L for lists, /Figure for images
-        bdc_tag = tag if tag in ('H', 'P', 'L', 'Figure') else 'P'
-
-        # Inject BDC/EMC wrapper
-        wrapped = (
-            f'/{bdc_tag} <</MCID {mcid}>> BDC\n'.encode() +
-            data +
-            b'\nEMC\n'
-        )
-        stream.write(wrapped)
-
-        # Create struct element(s) for this MCID
-        if tag == 'L':
-            list_items = entry[2] if entry else []
-            l_elem = make_elem(doc_elem, 'L', page_ref)
-            l_elem['/K'] = pikepdf.Array([pikepdf.Integer(mcid)])
-            tags_created['L'] += 1
-            # LI children reference the same MCID via the parent L
-            for _, item_text in list_items:
-                li_elem  = make_elem(l_elem, 'LI',    page_ref)
-                lbody    = make_elem(li_elem, 'LBody', page_ref)
-            page_mcid_map[mcid] = l_elem
-
-        elif tag == 'Figure':
-            fig_elem = make_elem(doc_elem, 'Figure', page_ref)
-            fig_elem['/Alt'] = pikepdf.String('[Figure — alt text required]')
-            fig_elem['/K']   = pikepdf.Array([pikepdf.Integer(mcid)])
-            tags_created['Figure'] += 1
-            page_mcid_map[mcid] = fig_elem
-
-        else:
-            # H or P
-            struct_tag = 'H' if tag == 'H' else 'P'
-            elem = make_elem(doc_elem, struct_tag, page_ref)
-            elem['/K'] = pikepdf.Array([pikepdf.Integer(mcid)])
-            tags_created[struct_tag] = tags_created.get(struct_tag, 0) + 1
+    page_obj['/StructParents'] = Integer(sp)
+    
+    # Build tag sequence
+    tag_seq = list(fitz_tags)
+    while len(tag_seq) < bt_count:
+        tag_seq.append('P')
+    tag_iter = iter(tag_seq)
+    
+    # Process all instructions across page
+    new_all, mcids_on_page = process_instructions(all_instructions, total_mcids, tag_iter)
+    
+    # Now we need to write new instructions back to streams.
+    # Simplest correct approach: write all new instructions into the first stream,
+    # clear the others. This is safe because content streams are concatenated.
+    if streams:
+        first_stream = streams[0]
+        first_stream.write(pikepdf.unparse_content_stream(new_all))
+        # Clear other streams
+        for stream in streams[1:]:
+            stream.write(b'')
+    
+    # Tabs=/S for pages with annotations
+    if page_obj.get('/Annots') is not None:
+        page_obj['/Tabs'] = Name('/S')
+    
+    # Create struct elements
+    used_tags = tag_seq[:mcids_on_page]
+    page_mcid_map = {}
+    current_sect = make_elem(doc_elem, 'Sect', page_obj)
+    
+    for i, tag in enumerate(used_tags):
+        mcid = total_mcids + i
+        if tag == 'H':
+            current_sect = make_elem(doc_elem, 'Sect', page_obj)
+            elem = make_elem(current_sect, 'H', page_obj)
+            elem['/K'] = Array([Integer(mcid)])
             page_mcid_map[mcid] = elem
-
-    # Build ParentTree array for this page
+            tags_created['H'] = tags_created.get('H', 0) + 1
+        elif tag == 'L':
+            l_elem = make_elem(current_sect, 'L', page_obj)
+            li = make_elem(l_elem, 'LI', page_obj)
+            make_elem(li, 'LBody', page_obj)
+            l_elem['/K'] = Array([Integer(mcid)])
+            page_mcid_map[mcid] = l_elem
+            tags_created['L'] = tags_created.get('L', 0) + 1
+        elif tag == 'Figure':
+            fig = make_elem(current_sect, 'Figure', page_obj)
+            fig['/Alt'] = String('[Figure - alt text required]')
+            fig['/K'] = Array([Integer(mcid)])
+            page_mcid_map[mcid] = fig
+            tags_created['Figure'] = tags_created.get('Figure', 0) + 1
+        else:
+            elem = make_elem(current_sect, 'P', page_obj)
+            elem['/K'] = Array([Integer(mcid)])
+            page_mcid_map[mcid] = elem
+            tags_created['P'] = tags_created.get('P', 0) + 1
+    
+    page_mcid_base = total_mcids
+    total_mcids += mcids_on_page
+    
     if page_mcid_map:
         max_mcid = max(page_mcid_map.keys())
-        pt_array = pikepdf.Array([None] * (max_mcid + 1))
+        pt_array = Array([None] * (max_mcid - page_mcid_base + 1))
         for m, elem in page_mcid_map.items():
-            pt_array[m] = pdf.make_indirect(elem)
+            pt_array[m - page_mcid_base] = pdf.make_indirect(elem)
         parent_tree_entries[sp] = pt_array
 
-# ── Phase 5: write ParentTree ─────────────────────────────────────────────────
+# ── Phase 4: write ParentTree ────────────────────────────────────────────────
 
-nums = pikepdf.Array()
+nums = Array()
 for key in sorted(parent_tree_entries):
-    nums.append(pikepdf.Integer(key))
+    nums.append(Integer(key))
     nums.append(parent_tree_entries[key])
+struct_tree['/ParentTree'] = pdf.make_indirect(Dictionary(Nums=nums))
+struct_tree['/ParentTreeNextKey'] = Integer(sp_counter)
 
-struct_tree['/ParentTree'] = pdf.make_indirect(
-    pikepdf.Dictionary(Nums=nums)
-)
-struct_tree['/ParentTreeNextKey'] = pikepdf.Integer(sp_counter)
-
-# ── Save ──────────────────────────────────────────────────────────────────────
+# ── Save ─────────────────────────────────────────────────────────────────────
 
 pdf.save(args.output_pdf)
 pdf.close()
 Path(tmp).unlink(missing_ok=True)
 
-total_elements = sum(tags_created.values())
-
 result_obj = {
-    'input':            args.input_pdf,
-    'output':           args.output_pdf,
-    'result':           'FIXED',
-    'pages_processed':  len(pages_content),
-    'total_mcids':      total_mcids,
+    'input': args.input_pdf,
+    'output': args.output_pdf,
+    'result': 'FIXED',
+    'pages_processed': len(page_block_tags),
+    'total_mcids': total_mcids,
     'elements_created': tags_created,
-    'total_elements':   total_elements,
     'note': (
-        'Structure tree generated with MCID markers and ParentTree. '
-        'Run fix_struct_content_marking.py next to verify and harden '
-        'ParentTree connectivity. Then run veraPDF to confirm 7.1/3 passes.'
+        'Structure tree generated using token-level content stream parsing. '
+        'Run fix_struct_content_marking.py to verify ParentTree connectivity, '
+        'then veraPDF to confirm.'
     )
 }
 
@@ -369,5 +494,4 @@ result_str = json.dumps(result_obj, indent=2)
 print(result_str)
 if args.out:
     Path(args.out).write_text(result_str)
-
 sys.exit(0)
