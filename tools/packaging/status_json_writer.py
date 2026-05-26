@@ -121,9 +121,27 @@ NORMALIZED_PASS = {
     'SKIPPED', 'OK', 'PLAN_READY', 'NO_FAILURES'
 }
 
-normalized = ['PASS' if r in NORMALIZED_PASS else r for r in all_results]
+# Exclude pre-repair baseline gates from overall result.
+# Keys ending in _pre are expected to fail — that's why we run repairs.
+# Also exclude informational-only gates that don't affect compliance verdict.
+EXCLUDE_FROM_OVERALL = {
+    'verapdf_baseline', 'parse_summary', 'repair_plan',
+    'verapdf_pdfua',    # baseline pre-repair veraPDF — use verapdf_post instead
+    'failures',         # pre-repair failure list — informational only
+}
 
-if not all_results:
+final_results = []
+for gate_name, gate_info in status.get('gates', {}).items():
+    if gate_name.endswith('_pre'):
+        continue
+    if gate_name in EXCLUDE_FROM_OVERALL:
+        continue
+    r = gate_info.get('result', 'UNKNOWN') if isinstance(gate_info, dict) else gate_info
+    final_results.append(r)
+
+normalized = ['PASS' if r in NORMALIZED_PASS else r for r in final_results]
+
+if not final_results:
     status['overall_result'] = 'NO_RESULTS'
 elif any(r == 'FAIL' for r in normalized):
     status['overall_result'] = 'FAIL'
