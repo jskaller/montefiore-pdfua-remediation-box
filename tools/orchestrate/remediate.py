@@ -255,6 +255,42 @@ if not is_pass(qpdf_result):
     sys.exit(1)
 emit('PREFLIGHT', 'qpdf_check', qpdf_result)
 
+# 1c. Struct tree pre-flight — detect untagged PDFs early
+emit('PREFLIGHT', 'struct_tree_check', 'RUNNING')
+try:
+    import fitz as _fitz
+    _doc = _fitz.open(str(PASS0))
+    _catalog = _doc.pdf_catalog()
+    _str_ref = _doc.xref_get_key(_catalog, 'StructTreeRoot')
+    _has_struct = _str_ref[0] != 'null' and bool(_str_ref[1])
+    _doc.close()
+except Exception as _e:
+    _has_struct = None
+
+if _has_struct is False:
+    gate_results['struct_tree_check'] = 'FAIL'
+    emit('PREFLIGHT', 'struct_tree_check', 'FAIL')
+    emit_deviation(
+        'struct_tree_check',
+        'StructTreeRoot present',
+        'No StructTreeRoot — document is not tagged',
+        'This document has no PDF structure tree. Auto-remediation is not possible. '
+        'Full retagging is required using Acrobat Pro or CommonLook. '
+        'Set job result to FAIL and escalate to manual remediation team.',
+        layer=1
+    )
+    # Write FAIL status and exit
+    gate_results['overall'] = 'FAIL'
+    (AUDIT_DIR / 'struct_tree_check.json').write_text(json.dumps({
+        'result': 'FAIL',
+        'reason': 'No StructTreeRoot — document is not tagged',
+        'action': 'MANUAL_ESCALATION_REQUIRED'
+    }, indent=2))
+    sys.exit(1)
+
+gate_results['struct_tree_check'] = 'PASS'
+emit('PREFLIGHT', 'struct_tree_check', 'PASS' if _has_struct else 'UNKNOWN')
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PHASE 2 — Audit gates (all run before any repair)
 # ─────────────────────────────────────────────────────────────────────────────
