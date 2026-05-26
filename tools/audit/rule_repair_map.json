@@ -11,7 +11,7 @@
       "MANUAL": "Cannot be auto-repaired \u2014 requires human intervention or Acrobat Pro"
     },
     "repair_order_note": "repair_order matches the mandatory sequence in AGENTS.md. Always apply repairs in ascending order. fix_table_headers.py (order 10) MUST be last \u2014 no saves may occur after it.",
-    "confirmed_jobs": 7,
+    "confirmed_jobs": 8,
     "last_updated": "2026-05-26"
   },
   "rules": {
@@ -23,7 +23,7 @@
       "run_last": false,
       "args_pattern": "<input.pdf> <output.pdf>",
       "confidence": "CONFIRMED",
-      "confirmed_jobs": 7,
+      "confirmed_jobs": 8,
       "notes": "Top-level conformance clause. Always fixed by setting pdfuaid:part=1, pdfuaid:amd=2005. Run first.",
       "last_confirmed": "2026-05-26",
       "failure_modes": [
@@ -75,7 +75,7 @@
       "run_last": false,
       "args_pattern": "<input.pdf> <output.pdf> --title \"...\" --subject \"...\" --keywords \"...\"",
       "confidence": "CONFIRMED",
-      "confirmed_jobs": 7,
+      "confirmed_jobs": 8,
       "notes": "Arlington profile reports all 7.1.x failures under the parent clause 7.1. Run both fix_pdfua_identifier.py (repair_order 1) and fix_metadata_xmp_parity.py (repair_order 2) when this rule fires \u2014 they together cover Marked, DisplayDocTitle, Lang, and XMP fields. Always pass --title, --subject, --keywords derived from document content.",
       "last_confirmed": "2026-05-26",
       "failure_modes": [
@@ -149,7 +149,7 @@
       "run_last": false,
       "args_pattern": "<input.pdf> <output.pdf> --alt-map $JOB/reports/alt_map_approved.json",
       "confidence": "CONFIRMED",
-      "confirmed_jobs": 7,
+      "confirmed_jobs": 8,
       "notes": "Check for alt_map_approved.json first (Branch A). If exists, apply directly. If not, run generate_alt_text_drafts.py then pause for human review (Branch B). Never apply placeholder text to production output.",
       "last_confirmed": "2026-05-26",
       "failure_modes": [
@@ -256,7 +256,7 @@
       "run_last": false,
       "args_pattern": "<input.pdf> <output.pdf>",
       "confidence": "CONFIRMED",
-      "confirmed_jobs": 7,
+      "confirmed_jobs": 8,
       "notes": "MUST run AFTER all PyMuPDF saves. PyMuPDF garbage=4 rewrite regenerates font descriptors and restores CIDSet entries. Running fix_cidset last among non-table repairs ensures removal is not undone. Uses pikepdf \u2014 safe from PyMuPDF interference after this point.",
       "last_confirmed": "2026-05-26",
       "failure_modes": [

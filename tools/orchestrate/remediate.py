@@ -476,6 +476,48 @@ for step in repair_steps:
                  '--alt-map', ALT_MAP_JOB, '--language', LANGUAGE],
                 script_label
             )
+            # Always generate review HTML so operator can inspect what was applied.
+            # Convert approved map to draft format for the review report generator.
+            review_html  = REPORTS_DIR / 'alt_text_review.html'
+            draft_json   = REPORTS_DIR / 'alt_text_drafts.json'
+            try:
+                approved = json.loads(ALT_MAP_JOB.read_text())
+                # Build draft format from approved map
+                draft = {
+                    'result': 'PASS',
+                    'pdf': str(current_pdf),
+                    'model': 'approved_map',
+                    'figures_total': len(approved.get('figures', {})),
+                    'figures_drafted': len(approved.get('figures', {})),
+                    'figures_skipped': 0,
+                    'figures': {
+                        idx: {
+                            'figure_index': int(idx),
+                            'page': 1,
+                            'xref': 0,
+                            'alt_text_draft': entry.get('alt_text', ''),
+                            'source': 'approved_map',
+                            'model': 'approved_map',
+                            'instruction': entry.get('instruction'),
+                            'decorative': entry.get('decorative', False),
+                        }
+                        for idx, entry in approved.get('figures', {}).items()
+                    }
+                }
+                draft_json.write_text(json.dumps(draft, indent=2))
+                run(
+                    ['python3', TOOLS/'repair'/'generate_alt_text_review_report.py',
+                     current_pdf,
+                     '--draft', draft_json,
+                     '--out', review_html,
+                     '--map-out', REPORTS_DIR / 'alt_map_pre_approved.json'],
+                    f'{script_label}_review_html'
+                )
+                emit('REPAIR', f'{script_label}_review_html', 'PASS',
+                     note=f'Review HTML: {review_html}')
+            except Exception as e:
+                emit('REPAIR', f'{script_label}_review_html', 'WARN',
+                     note=f'Could not generate review HTML: {e}')
         else:
             # Branch B — auto mode → drafts → auto-approve → apply
             auto_pdf     = REPAIR_DIR / f'pass{pass_num}_alt_auto.pdf'
