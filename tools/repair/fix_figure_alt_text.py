@@ -56,8 +56,14 @@ if args.alt_map:
         for idx_str, entry in map_data.get('figures', {}).items():
             if entry.get('decorative'):
                 decorative.add(str(idx_str))
-            elif entry.get('alt_text'):
-                alt_map[str(idx_str)] = entry['alt_text']
+            else:
+                # Accept either key name. Different map writers use different
+                # conventions: generate_alt_text_drafts.py writes 'alt_text_draft',
+                # human-edited maps and the asset library use 'alt_text'.
+                # Either is treated as the approved alt text in manual mode.
+                alt_value = entry.get('alt_text') or entry.get('alt_text_draft')
+                if alt_value:
+                    alt_map[str(idx_str)] = alt_value
     except Exception as e:
         print(json.dumps({'result': 'ERROR', 'error': f'Could not read alt-map: {e}'}))
         sys.exit(2)
