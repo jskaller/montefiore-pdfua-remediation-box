@@ -269,27 +269,41 @@ except Exception as _e:
 
 if _has_struct is False:
     gate_results['struct_tree_check'] = 'FAIL'
-    emit('PREFLIGHT', 'struct_tree_check', 'FAIL')
-    emit_deviation(
-        'struct_tree_check',
-        'StructTreeRoot present',
-        'No StructTreeRoot — document is not tagged',
-        'This document has no PDF structure tree. Auto-remediation is not possible. '
-        'Full retagging is required using Acrobat Pro or CommonLook. '
-        'Set job result to FAIL and escalate to manual remediation team.',
-        layer=1
-    )
-    # Write FAIL status and exit
-    gate_results['overall'] = 'FAIL'
-    (AUDIT_DIR / 'struct_tree_check.json').write_text(json.dumps({
-        'result': 'FAIL',
-        'reason': 'No StructTreeRoot — document is not tagged',
-        'action': 'MANUAL_ESCALATION_REQUIRED'
-    }, indent=2))
-    sys.exit(1)
+    emit('PREFLIGHT', 'struct_tree_check', 'FAIL',
+         note='No StructTreeRoot — running fix_untagged_pdf.py to auto-generate structure tree')
 
-gate_results['struct_tree_check'] = 'PASS'
-emit('PREFLIGHT', 'struct_tree_check', 'PASS' if _has_struct else 'UNKNOWN')
+    # Auto-fix: generate basic structure tree before continuing
+    untagged_fix = TOOLS / 'repair' / 'fix_untagged_pdf.py'
+    pass1_tagged = REPAIR_DIR / 'pass1_fix_untagged.pdf'
+
+    if untagged_fix.exists():
+        rc_tag, out_tag, _ = run(
+            ['python3', untagged_fix, PASS0, pass1_tagged,
+             '--out', AUDIT_DIR / 'fix_untagged.json'],
+            'fix_untagged_pdf'
+        )
+        tag_data = None
+        try:
+            tag_data = json.loads(out_tag)
+        except Exception:
+            pass
+
+        if rc_tag == 0 and pass1_tagged.exists():
+            emit('PREFLIGHT', 'fix_untagged_pdf', 'FIXED',
+                 note='Basic structure tree generated. Continuing pipeline on tagged output.')
+            PASS0 = pass1_tagged  # Use tagged version as new source for all subsequent steps
+            gate_results['struct_tree_check'] = 'FIXED'
+        else:
+            emit_deviation('fix_untagged_pdf', 'FIXED', 'FAIL',
+                          out_tag[:200] if out_tag else 'no output', layer=1)
+            sys.exit(1)
+    else:
+        emit_deviation('struct_tree_check', 'fix_untagged_pdf.py exists',
+                       'script not found', str(untagged_fix), layer=1)
+        sys.exit(1)
+else:
+    gate_results['struct_tree_check'] = 'PASS'
+    emit('PREFLIGHT', 'struct_tree_check', 'PASS' if _has_struct else 'UNKNOWN')
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PHASE 2 — Audit gates (all run before any repair)

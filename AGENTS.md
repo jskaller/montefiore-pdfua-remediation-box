@@ -425,7 +425,8 @@ the tool cannot run. A compliance failure means the document does not comply.
 - Never process a PDF not explicitly named as the active source
 - Never hand off a document where veraPDF PDF/UA still fails
 - Never modify files in `workspace/input/` — source PDFs are read-only
-- **Never modify, overwrite, or write to any file under `/app/tools/` or `/app/skills/`** — these are read-only executables. Run them, never edit them. If a script fails, report the error — do not attempt to patch it inline.
+- **Never modify or overwrite existing files under `/app/tools/` or `/app/skills/`** — existing scripts are read-only executables. Run them, never edit them. If a script fails, report the error — do not attempt to patch it inline.
+- **You MAY write new repair scripts to `/app/tools/repair/`** when you encounter a failure pattern that no existing script addresses. New scripts must: follow the standard pattern (`<input.pdf> <output.pdf> [--out results.json]`), output structured JSON, and be generalizable (not document-specific). After writing and verifying a new script, add its rule mapping to `/app/tools/audit/rule_repair_map.json` so future jobs use it automatically.
 - Never output intermediate files to `workspace/output/`
 - Always run `preservation_audit.py` after any repair
 - Always run `metadata_xmp_parity_audit.py` after final save
