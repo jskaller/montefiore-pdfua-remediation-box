@@ -276,7 +276,7 @@ def infer_content_tags(pdf_path, taxonomy):
                 {'role': 'user', 'content': prompt}
             ],
             'temperature': 0.0,
-            'max_tokens': 500
+            'max_tokens': 2000
         }).encode('utf-8')
 
         req = urllib.request.Request(
@@ -287,10 +287,18 @@ def infer_content_tags(pdf_path, taxonomy):
                 'Content-Type':  'application/json'
             }
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=60) as resp:
             response = json.loads(resp.read().decode('utf-8'))
 
-        content = response['choices'][0]['message']['content'].strip()
+        message = response['choices'][0]['message']
+        # stepfun-ai/step-3.5-flash is a reasoning model — final answer goes
+        # into 'content' but reasoning trace is in 'reasoning_content'.
+        # If content is null, the model ran out of tokens before finishing —
+        # try to extract JSON from reasoning_content as fallback.
+        content = message.get('content') or message.get('reasoning_content') or ''
+        content = content.strip()
+        if not content:
+            return [], []
         # Strip markdown fences if present
         if content.startswith('```'):
             content = content.split('```', 2)[1]
@@ -302,11 +310,16 @@ def infer_content_tags(pdf_path, taxonomy):
         valid_tags = {t['tag'] for t in content_tag_candidates}
         assigned   = [t for t in parsed.get('assigned_tags', []) if t in valid_tags]
         proposed   = parsed.get('proposed_new_tags', [])
-        # Sanity check proposed format
         proposed   = [p for p in proposed
                       if isinstance(p, dict) and 'tag' in p and 'description' in p]
         return assigned, proposed
-    except Exception:
+    except Exception as e:
+        # Emit warning so the issue is visible in orchestrator output
+        try:
+            emit('SETUP', 'doc_tagging_content', 'WARN',
+                 note=f'Content classification NIM call failed: {type(e).__name__}: {e}')
+        except Exception:
+            pass
         return [], []
 
 
