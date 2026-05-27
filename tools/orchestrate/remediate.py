@@ -257,8 +257,14 @@ def infer_content_tags(pdf_path, taxonomy):
 
     try:
         import os, urllib.request, urllib.error
-        api_key  = os.environ.get('NIM_API_KEY', '')
-        api_url  = os.environ.get('NIM_API_URL', 'https://integrate.api.nvidia.com/v1/chat/completions')
+        # Match the same fallback pattern used by generate_alt_text_drafts.py:
+        # prefer VISION_PROVIDER_* vars, fall back to PRIMARY_PROVIDER_* vars.
+        api_key = (os.environ.get('VISION_PROVIDER_API_KEY') or
+                   os.environ.get('PRIMARY_PROVIDER_API_KEY', ''))
+        base_url = (os.environ.get('VISION_PROVIDER_BASE_URL') or
+                    os.environ.get('PRIMARY_PROVIDER_BASE_URL', '')).rstrip('/')
+        api_url  = base_url + '/chat/completions' if base_url else \
+                   'https://integrate.api.nvidia.com/v1/chat/completions'
         model    = os.environ.get('PRIMARY_MODEL', 'stepfun-ai/step-3.5-flash')
 
         if not api_key:
