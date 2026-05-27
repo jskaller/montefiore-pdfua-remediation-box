@@ -407,6 +407,15 @@ if proposed_taxonomy_additions:
     except Exception:
         pass
 
+# Persist doc_tags to a sidecar that status_json_writer can pick up
+if doc_tags:
+    try:
+        (AUDIT_DIR / 'doc_tags.json').write_text(
+            json.dumps(doc_tags, indent=2)
+        )
+    except Exception:
+        pass
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PHASE 1 — Pre-flight
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1153,6 +1162,29 @@ emit('PACKAGE', 'overall_result', overall,
 
 # Write STATUS.json
 emit('PACKAGE', 'status_json', 'RUNNING')
+
+# Persist OPENCLAW_REQUIRED signals to a sidecar that status_json_writer can read
+try:
+    (AUDIT_DIR / 'openclaw_signals.json').write_text(
+        json.dumps(openclaw_signals, indent=2)
+    )
+except Exception:
+    pass
+
+# Persist the orchestrator's authoritative overall result so status_json_writer
+# uses it directly instead of re-deriving from gate values.
+try:
+    (AUDIT_DIR / 'orchestrator_outcome.json').write_text(
+        json.dumps({
+            'overall_result':   overall,
+            'critical_fails':   critical_fails,
+            'total_iterations': total_iterations,
+            'has_openclaw':     len(openclaw_signals) > 0,
+        }, indent=2)
+    )
+except Exception:
+    pass
+
 run(['python3', TOOLS/'packaging'/'status_json_writer.py', JOB,
      '--pdf', str(SOURCE_PDF)], 'status_json')
 emit('PACKAGE', 'status_json', 'PASS')
