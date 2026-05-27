@@ -1,0 +1,54 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "purpose": "Controlled vocabulary of document tags used to weight repair strategy ordering. The agent assigns tags at job start by comparing document content against this list. Multiple tags per document are expected — most documents are composite. Tags affect strategy ordering only, never eligibility. New tags are added here after human confirmation following a successful job.",
+    "tagging_instructions": "At job start, read the source PDF and assign all tags that apply. Use fuzzy matching — if the document closely resembles a tag description, assign it. When no existing tag fits a significant characteristic of the document, propose a new tag with a one-line description. New tags are not added automatically — flag the proposal in STATUS.json under proposed_taxonomy_additions for human review.",
+    "last_updated": "2026-05-27"
+  },
+  "tags": [
+    {
+      "tag": "consumer_guide",
+      "description": "Multi-page informational document for patients or consumers. Prose-heavy, minimal or no form fields. Typically includes headings, paragraphs, and figures. Example: Avoiding Surprises in Your Medical Bills."
+    },
+    {
+      "tag": "enrollment_form",
+      "description": "Form document for patient enrollment or registration. Mix of instructional text and fillable form fields. May include signature blocks and checkboxes. Example: E-Parent Enrollment Packet."
+    },
+    {
+      "tag": "roi_form",
+      "description": "Release of Information form. Typically a single or two-page form with checkboxes, signature fields, and brief instructional text. Example: Montefiore ROI form instructions-English."
+    },
+    {
+      "tag": "instructional_text",
+      "description": "Document whose primary content is step-by-step instructions or procedural guidance. May stand alone or accompany a form."
+    },
+    {
+      "tag": "multi_language",
+      "description": "Document available in or containing multiple languages. May have parallel text blocks or separate language sections."
+    },
+    {
+      "tag": "form_fields",
+      "description": "Document contains PDF form widgets — checkboxes, text inputs, dropdown menus, signature fields, or radio buttons."
+    },
+    {
+      "tag": "tables",
+      "description": "Document contains one or more data tables with rows and columns. May or may not be tagged in the struct tree."
+    },
+    {
+      "tag": "images_figures",
+      "description": "Document contains meaningful images or figures that require alt text for accessibility."
+    },
+    {
+      "tag": "multi_page",
+      "description": "Document is more than 4 pages."
+    },
+    {
+      "tag": "clinical",
+      "description": "Document contains clinical content — diagnoses, treatments, medications, lab results, or medical procedures."
+    },
+    {
+      "tag": "financial",
+      "description": "Document contains financial content — billing, insurance, costs, payment instructions, or financial assistance."
+    }
+  ]
+}
