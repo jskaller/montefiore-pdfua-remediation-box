@@ -820,28 +820,36 @@ while unresolved_scripts and total_iterations < JOB_HARD_CAP:
                 drafts_json = REPORTS_DIR/ 'alt_text_drafts.json'
                 review_html = REPORTS_DIR/ 'alt_text_review.html'
 
-                rc_auto, _, _ = run(
+                rc_auto, out_auto, _ = run(
                     ['python3', script_path, iteration_pdf, auto_pdf,
                      '--language', LANGUAGE],
                     f'{script_label}_auto'
                 )
                 globals()['pass_num'] = pass_num + 1
 
-                if rc_auto != 0 or not auto_pdf.exists():
+                # fix_figure_alt_text auto-mode exits 1 with result=NEEDS_REVIEW
+                # when placeholders are set — that is the expected success case.
+                # Only treat it as a failure if no output PDF was produced.
+                if not auto_pdf.exists():
                     emit_deviation(f'{script_label}_auto',
                                    f'auto_pdf exists at {auto_pdf}',
-                                   f'rc={rc_auto}, file_missing={not auto_pdf.exists()}',
+                                   f'rc={rc_auto}, file_missing=True',
                                    'Branch B auto-mode failed to produce intermediate PDF',
                                    layer=1)
                     script_results[script] = {'step': step, 'result': 'AUTO_FAILED', 'executed': False}
                     continue
 
+                # Write auto_json from stdout
+                try:
+                    auto_data = json.loads(out_auto)
+                    auto_json.write_text(json.dumps(auto_data, indent=2))
+                except Exception:
+                    pass
+
+                # Step B2: generate drafts via vision model
                 run(['python3', TOOLS/'repair'/'generate_alt_text_drafts.py',
                      auto_pdf, '--fix-output', auto_json, '--out', drafts_json],
                     f'{script_label}_drafts')
-                run(['python3', TOOLS/'repair'/'generate_alt_text_review_report.py',
-                     drafts_json, review_html],
-                    f'{script_label}_review')
 
                 if not drafts_json.exists():
                     emit_deviation(f'{script_label}_drafts',
@@ -851,15 +859,37 @@ while unresolved_scripts and total_iterations < JOB_HARD_CAP:
                     script_results[script] = {'step': step, 'result': 'DRAFTS_FAILED', 'executed': False}
                     continue
 
-                shutil.copy2(drafts_json, ALT_MAP_JOB)
+                # Step B3: generate review report
+                # generate_alt_text_review_report.py writes the pre-approved map
+                # directly via --map-out, and produces the HTML review report.
+                rc_review, out_review, _ = run(
+                    ['python3', TOOLS/'repair'/'generate_alt_text_review_report.py',
+                     str(auto_pdf),
+                     '--draft',   str(drafts_json),
+                     '--out',     str(review_html),
+                     '--map-out', str(ALT_MAP_JOB)],
+                    f'{script_label}_review'
+                )
+
+                if not ALT_MAP_JOB.exists():
+                    # Fallback: copy drafts directly as approved map
+                    shutil.copy2(drafts_json, ALT_MAP_JOB)
+                    emit('REPAIR', f'{script_label}_review', 'WARN',
+                         note='Review report failed — drafts auto-approved directly')
+                else:
+                    emit('REPAIR', f'{script_label}_review', 'PASS',
+                         note=f'Review HTML: {review_html}')
+
                 alt_branch = 'A_LOCAL'
 
+                # Step B4: apply approved map
                 rc, out, err = run(
                     ['python3', script_path, auto_pdf, output_pdf,
                      '--alt-map', ALT_MAP_JOB, '--language', LANGUAGE],
                     f'{script_label}_apply'
                 )
 
+                # Step B5: copy to asset library for future runs
                 asset_dir = WORKSPACE / 'assets' / 'alt_maps'
                 asset_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ALT_MAP_JOB,
