@@ -14,7 +14,7 @@
     "strategy_ordering": "Sort strategies by: (1) pass_rate descending, (2) pass_count descending as tiebreaker, (3) doc_tag_overlap_score descending as final tiebreaker. Never exclude a strategy based on doc type \u2014 doc type affects ordering only, not eligibility. Skip strategies whose known_failure_modes match the current document's observed failure reason.",
     "openclaw_triggers": "The orchestrator emits an OPENCLAW_REQUIRED signal when: (a) manual:true and strategies is empty, (b) all strategies exhausted with no PASS, (c) rule_id not found in map at all (unknown_rule). The signal includes rule_id, description, all strategy attempt history with failure reasons, and document tags. The agent reads the signal and either writes a new script or escalates to the operator if automation is not possible. For unknown rules, the agent researches the rule before writing.",
     "repair_order_note": "repair_order within each strategy matches the mandatory sequence. fix_table_headers.py (order 10) MUST be last \u2014 no saves may occur after it. fix_table_tagging.py (order 9) MUST run before fix_table_headers.py.",
-    "confirmed_jobs": 3,
+    "confirmed_jobs": 6,
     "last_updated": "2026-05-27"
   },
   "rules": {
@@ -46,6 +46,26 @@
           ],
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
+        }
+      ],
+      "edge_cases": [
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_pdfua_identifier.py",
+          "note": ""
+        },
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_pdfua_identifier.py",
+          "note": ""
+        },
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_pdfua_identifier.py",
+          "note": ""
         }
       ]
     },
@@ -212,6 +232,26 @@
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
         }
+      ],
+      "edge_cases": [
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_metadata_xmp_parity.py",
+          "note": ""
+        },
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_metadata_xmp_parity.py",
+          "note": ""
+        },
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_metadata_xmp_parity.py",
+          "note": ""
+        }
       ]
     },
     "PDF/UA-1/7.1-1": {
@@ -343,6 +383,26 @@
           ],
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
+        }
+      ],
+      "edge_cases": [
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_figure_alt_text.py",
+          "note": ""
+        },
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_figure_alt_text.py",
+          "note": ""
+        },
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_figure_alt_text.py",
+          "note": ""
         }
       ]
     },
@@ -516,6 +576,26 @@
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
         }
+      ],
+      "edge_cases": [
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_link_annotation_descriptions.py",
+          "note": ""
+        },
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_link_annotation_descriptions.py",
+          "note": ""
+        },
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_link_annotation_descriptions.py",
+          "note": ""
+        }
       ]
     },
     "PDF/UA-1/7.18.1-1": {
@@ -599,6 +679,26 @@
           ],
           "known_failure_modes": [],
           "confidence": "EXPECTED"
+        }
+      ],
+      "edge_cases": [
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_link_annotation_descriptions.py",
+          "note": ""
+        },
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_link_annotation_descriptions.py",
+          "note": ""
+        },
+        {
+          "job_id": "MM-TEST2_Avoiding-Surprises-in-Your-Medical-Bills",
+          "date": "2026-05-27",
+          "script_used": "tools/repair/fix_link_annotation_descriptions.py",
+          "note": ""
         }
       ]
     },
