@@ -12,7 +12,7 @@
     },
     "repair_order_note": "repair_order matches the mandatory sequence in AGENTS.md. Always apply repairs in ascending order. fix_table_headers.py (order 10) MUST be last \u2014 no saves may occur after it. fix_table_tagging.py (order 9) MUST run before fix_table_headers.py.",
     "confirmed_jobs": 3,
-    "last_updated": "2026-05-26"
+    "last_updated": "2026-05-27"
   },
   "rules": {
     "PDF/UA-1/5": {
@@ -387,6 +387,50 @@
       "confirmed_jobs": 1,
       "last_confirmed": "2026-05-26",
       "notes": "NOT triggered by a veraPDF rule \u2014 injected by remediate.py when table_semantics_audit.py reports untagged_table_pages (after geometry + vision false-positive filtering). Uses pdfplumber for geometric detection, NIM vision model to confirm candidates and identify header rows, then restructures existing MCIDs into Table > TR > TH|TD hierarchy via pikepdf. Must run BEFORE fix_table_headers.py (repair_order 10) which adds Scope to TH cells this script creates. repair_order 9 ensures it runs after fix_cidset.py and before fix_table_headers.py. Confirmed on MM-TEST2: 1 table tagged, 7 false positives rejected, zero new veraPDF failures introduced."
+    },
+    "PDF/UA-1/7.18.4": {
+      "clause": "7.18.4",
+      "description": "Widget annotation is not nested within a Form tag",
+      "repair_script": null,
+      "repair_order": null,
+      "run_last": false,
+      "args_pattern": null,
+      "confidence": "MANUAL",
+      "confirmed_jobs": 0,
+      "notes": "First seen on job MM-TEST3_English_E-Parent_Enrollment_Packet. Could not be auto-repaired \u2014 manual review required."
+    },
+    "PDF/UA-1/7.21.7": {
+      "clause": "7.21.7",
+      "description": "Font dictionary missing ToUnicode entry, or ToUnicode CMap contains zero or invalid Unicode values (U+0000, U+FEFF, U+FFFE)",
+      "repair_script": null,
+      "repair_order": null,
+      "run_last": false,
+      "args_pattern": null,
+      "confidence": "MANUAL",
+      "confirmed_jobs": 0,
+      "notes": "First seen on job MM-TEST3_English_E-Parent_Enrollment_Packet. Could not be auto-repaired \u2014 manual review required."
+    },
+    "PDF/UA-1/7.21.3.2": {
+      "clause": "7.21.3.2",
+      "description": "Type 2 CID font contains invalid or missing CIDToGIDMap entry",
+      "repair_script": null,
+      "repair_order": null,
+      "run_last": false,
+      "args_pattern": null,
+      "confidence": "MANUAL",
+      "confirmed_jobs": 0,
+      "notes": "First seen on job MM-TEST3_English_E-Parent_Enrollment_Packet. Could not be auto-repaired \u2014 manual review required."
+    },
+    "PDF/UA-1/7.4.2": {
+      "clause": "7.4.2",
+      "description": "Document uses numbered headings but the first heading tag is not H1",
+      "repair_script": null,
+      "repair_order": null,
+      "run_last": false,
+      "args_pattern": null,
+      "confidence": "MANUAL",
+      "confirmed_jobs": 0,
+      "notes": "First seen on job MM-TEST3_English_E-Parent_Enrollment_Packet. Could not be auto-repaired \u2014 manual review required."
     }
   },
   "manual_escalation_triggers": [
