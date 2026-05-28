@@ -11,35 +11,15 @@ The job directory has the following structure:
     qa/         ← QA JSONs (preservation, render_compare, visual_qa)
     reports/    ← alt text drafts, review HTML, alt maps
 
-Reads orchestrator sidecars from audit/ when present:
-  - orchestrator_outcome.json       authoritative overall_result from remediate.py
-  - openclaw_signals.json           agent-intervention signals
-  - strategy_attempts.json          per-rule attempt history
-  - proposed_taxonomy_additions.json doc taxonomy proposals
-  - doc_tags.json                    assigned doc tags
-
-Overall result determination, in priority order:
-  1. orchestrator_outcome.json's overall_result (if present) — authoritative.
-     The orchestrator computes this with full knowledge of iteration state,
-     critical gate failures, and escalation conditions. status_json_writer
-     does not re-adjudicate when this is present.
-  2. Derived from gates + openclaw signals (fallback when sidecar missing):
-     - FAIL if any non-pre gate failed
-     - ESCALATION if any openclaw_signal has escalation-tier reason
-     - REVIEW_REQUIRED if any review-tier signal or other openclaw_signal
-     - PASS if everything else is PASS-equivalent
-     - INCOMPLETE if results are mixed in ways above don't capture
-     - NO_RESULTS if no gate produced any signal
-
 Usage:
   status_json_writer.py <job-dir> [--pdf original.pdf] [--out STATUS.json]
 
 Exit codes:
-  0  PASS or REVIEW_REQUIRED
-  1  FAIL, ESCALATION, INCOMPLETE, or NO_RESULTS
+  0  PASS or REVIEW
+  1  FAIL, INCOMPLETE, or NO_RESULTS
   2  error
 """
-import sys, json, argparse, re
+import sys, json, argparse
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -68,26 +48,9 @@ status = {
     'gates':          {}
 }
 
-# ── Read orchestrator sidecars ───────────────────────────────────────────────
-
-audit_dir = job_dir / 'audit'
-
-openclaw_signals = load_json(audit_dir / 'openclaw_signals.json') or []
-strategy_attempts = load_json(audit_dir / 'strategy_attempts.json') or {}
-proposed_taxonomy_additions = load_json(audit_dir / 'proposed_taxonomy_additions.json') or []
-doc_tags = load_json(audit_dir / 'doc_tags.json') or []
-orchestrator_outcome = load_json(audit_dir / 'orchestrator_outcome.json')
-
-if openclaw_signals:
-    status['openclaw_signals'] = openclaw_signals
-if strategy_attempts:
-    status['strategy_attempts'] = strategy_attempts
-if proposed_taxonomy_additions:
-    status['proposed_taxonomy_additions'] = proposed_taxonomy_additions
-if doc_tags:
-    status['doc_tags'] = doc_tags
-
 # ── Known gate files — check both root and subdirectories ────────────────────
+# The agent may write JSON files to the root job_dir or to subdirectories
+# depending on how scripts are called. We check both locations.
 
 def find_file(job_dir, *candidates):
     """Find first existing file from a list of candidate paths."""
@@ -113,7 +76,7 @@ gate_files = {
     'parse_summary':   find_file(job_dir, 'audit/failures.json',                 'audit/parse_summary.json'),
 }
 
-all_results = []  # collected for legacy fallback path; primary outcome comes from sidecar
+all_results = []
 for gate_name, gate_path in gate_files.items():
     if gate_path and gate_path.exists():
         data = load_json(gate_path)
@@ -128,19 +91,8 @@ for gate_name, gate_path in gate_files.items():
 # ── Scan all subdirectories for additional JSON result files ──────────────────
 
 known_sources = {v.name for v in gate_files.values() if v}
-# Don't treat sidecars as gates
-sidecar_names = {
-    'openclaw_signals.json',
-    'strategy_attempts.json',
-    'proposed_taxonomy_additions.json',
-    'doc_tags.json',
-    'orchestrator_outcome.json',
-}
-scan_dirs = [job_dir, audit_dir, job_dir / 'repair',
+scan_dirs = [job_dir, job_dir / 'audit', job_dir / 'repair',
              job_dir / 'qa', job_dir / 'reports']
-
-# Exclude iteration-numbered intermediate files (e.g. preservation_iter3.json).
-ITER_PATTERN = re.compile(r'_iter\d+', re.IGNORECASE)
 
 for scan_dir in scan_dirs:
     if not scan_dir.exists():
@@ -149,10 +101,6 @@ for scan_dir in scan_dirs:
         if json_file.name == args.out:
             continue
         if json_file.name in known_sources:
-            continue
-        if json_file.name in sidecar_names:
-            continue
-        if ITER_PATTERN.search(json_file.name):
             continue
         data = load_json(json_file)
         if data and 'result' in data:
@@ -176,27 +124,11 @@ NORMALIZED_PASS = {
 # Exclude pre-repair baseline gates from overall result.
 # Keys ending in _pre are expected to fail — that's why we run repairs.
 # Also exclude informational-only gates that don't affect compliance verdict.
+# NOTE: verapdf_pdfua is the post-repair final veraPDF result and must NOT
+# be excluded — it is the authoritative compliance gate.
 EXCLUDE_FROM_OVERALL = {
     'verapdf_baseline', 'parse_summary', 'repair_plan',
-    'verapdf_pdfua',    # baseline pre-repair veraPDF — use verapdf_post instead
     'failures',         # pre-repair failure list — informational only
-    'failures_post',    # already reflected in verapdf_post
-    'detect_image_only_pages',  # pre-flight only
-}
-
-# Escalation-tier signals — if any openclaw_signal carries one of these reasons,
-# the job result is ESCALATION regardless of gate outcomes.
-ESCALATION_REASONS = {
-    'per_rule_cap_reached',
-    'job_hard_cap_reached',
-    'all_strategies_exhausted',
-}
-
-# Review-tier signals — if openclaw_signal present but not escalation-tier,
-# the job needs human review (e.g. manual_no_strategies, unknown_rule).
-REVIEW_REASONS = {
-    'manual_no_strategies',
-    'unknown_rule',
 }
 
 final_results = []
@@ -210,43 +142,16 @@ for gate_name, gate_info in status.get('gates', {}).items():
 
 normalized = ['PASS' if r in NORMALIZED_PASS else r for r in final_results]
 
-# Analyze openclaw signals
-has_escalation_signal = any(
-    s.get('reason') in ESCALATION_REASONS for s in openclaw_signals
-)
-has_review_signal = any(
-    s.get('reason') in REVIEW_REASONS for s in openclaw_signals
-)
-
-# If the orchestrator wrote an authoritative outcome sidecar, use it directly.
-# This prevents this writer and the orchestrator from disagreeing when both
-# would compute the same answer in normal cases — and prevents drift in edge
-# cases (e.g. ESCALATION vs FAIL distinction).
-if orchestrator_outcome and orchestrator_outcome.get('overall_result'):
-    status['overall_result']      = orchestrator_outcome['overall_result']
-    status['outcome_source']      = 'orchestrator'
-    status['orchestrator_outcome'] = orchestrator_outcome
-elif not final_results:
+if not final_results:
     status['overall_result'] = 'NO_RESULTS'
-    status['outcome_source'] = 'derived'
 elif any(r == 'FAIL' for r in normalized):
     status['overall_result'] = 'FAIL'
-    status['outcome_source'] = 'derived'
-elif has_escalation_signal:
-    status['overall_result'] = 'ESCALATION'
-    status['outcome_source'] = 'derived'
-elif has_review_signal:
-    status['overall_result'] = 'REVIEW_REQUIRED'
-    status['outcome_source'] = 'derived'
 elif any(r in ('REVIEW', 'PARTIAL', 'WARN', 'NEEDS_REVIEW') for r in normalized):
     status['overall_result'] = 'REVIEW_REQUIRED'
-    status['outcome_source'] = 'derived'
 elif all(r == 'PASS' for r in normalized):
     status['overall_result'] = 'PASS'
-    status['outcome_source'] = 'derived'
 else:
     status['overall_result'] = 'INCOMPLETE'
-    status['outcome_source'] = 'derived'
 
 out_path = job_dir / args.out
 out_path.write_text(json.dumps(status, indent=2))
