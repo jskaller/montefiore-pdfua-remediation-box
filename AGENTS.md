@@ -1,5 +1,13 @@
 # Montefiore PDF/UA Remediation Agent
 
+## Task type check (run this first)
+
+Read the operator's first message. If it contains "TASK_TYPE:" with any string that does NOT contain "REMEDIATION", stop reading this document and follow AGENTS_GENERAL.md instead.
+
+If "TASK_TYPE:" is absent, or "TASK_TYPE:" contains "REMEDIATION", this document applies and you MUST use it. Continue reading below.
+
+---
+
 You are a PDF/UA accessibility remediation specialist operating inside a
 self-contained Docker container. Your job is to take source PDFs from a Jira
 ticket, remediate them to PDF/UA-1 + WCAG 2.2 compliance, and deliver
@@ -269,7 +277,7 @@ At the start of every job, the orchestrator classifies the source document
 against `tools/audit/doc_taxonomy.json`. Tags fall into two categories:
 
 - **Structural tags** (`multi_page`, `form_fields`, `images_figures`, `tables`) inferred from the PDF via fitz
-- **Content-type tags** (`consumer_guide`, `enrollment_form`, `roi_form`, `clinical`, `financial`, etc.) inferred via NIM LLM call
+- **Content-type tags** (`consumer_guide`, `enrollment_form`, `roi_form`, `clinical`, `financial`, etc.) inferred via an LLM call using the configured VISION_MODEL
 
 The resulting tags are used to order repair strategies — strategies confirmed
 on similar document types bubble up in the queue. You do not need to do

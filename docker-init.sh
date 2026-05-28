@@ -30,7 +30,7 @@ fi
 # We overwrite them on every start to ensure our remediation config is always
 # current. Files live in /app/ (code tree) and are copied to /app/workspace/.
 
-for f in AGENTS.md SOUL.md IDENTITY.md TOOLS.md; do
+for f in AGENTS.md AGENTS_GENERAL.md SOUL.md IDENTITY.md TOOLS.md; do
     if [ -f "/app/${f}" ]; then
         cp "/app/${f}" "/app/workspace/${f}"
         echo "[init] Copied ${f} to workspace."
