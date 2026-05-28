@@ -19,14 +19,14 @@
     "defaults": {
       "workspace": "/app",
       "model": {
-        "primary": "nim/${PRIMARY_MODEL}",
+        "primary": "primary_provider/${PRIMARY_MODEL}",
         "fallbacks": []
       },
       "models": {
-        "nim/${PRIMARY_MODEL}": {
+        "primary_provider/${PRIMARY_MODEL}": {
           "alias": "primary"
         },
-        "nim/${VISION_MODEL}": {
+        "vision_provider/${VISION_MODEL}": {
           "alias": "vision"
         }
       }
@@ -35,17 +35,26 @@
   "models": {
     "mode": "merge",
     "providers": {
-      "nim": {
+      "primary_provider": {
         "baseUrl": "${PRIMARY_PROVIDER_BASE_URL}",
         "apiKey": "${PRIMARY_PROVIDER_API_KEY}",
         "api": "openai-completions",
         "models": [
           {
             "id": "${PRIMARY_MODEL}",
+            "name": "Primary Model",
             "input": ["text"]
-          },
+          }
+        ]
+      },
+      "vision_provider": {
+        "baseUrl": "${VISION_PROVIDER_BASE_URL}",
+        "apiKey": "${VISION_PROVIDER_API_KEY}",
+        "api": "openai-completions",
+        "models": [
           {
             "id": "${VISION_MODEL}",
+            "name": "Vision Model",
             "input": ["text", "image"]
           }
         ]
