@@ -56,14 +56,8 @@ if args.alt_map:
         for idx_str, entry in map_data.get('figures', {}).items():
             if entry.get('decorative'):
                 decorative.add(str(idx_str))
-            else:
-                # Accept either key name. Different map writers use different
-                # conventions: generate_alt_text_drafts.py writes 'alt_text_draft',
-                # human-edited maps and the asset library use 'alt_text'.
-                # Either is treated as the approved alt text in manual mode.
-                alt_value = entry.get('alt_text') or entry.get('alt_text_draft')
-                if alt_value:
-                    alt_map[str(idx_str)] = alt_value
+            elif entry.get('alt_text'):
+                alt_map[str(idx_str)] = entry['alt_text']
     except Exception as e:
         print(json.dumps({'result': 'ERROR', 'error': f'Could not read alt-map: {e}'}))
         sys.exit(2)
@@ -132,6 +126,137 @@ def set_lang_on_element(xref, doc, language):
         pass
     return False
 
+# ── Page resolution helpers ───────────────────────────────────────────────────
+
+def _build_page_xref_map(doc):
+    """Return dict mapping page-object xref -> 0-based page index."""
+    m = {}
+    for i in range(len(doc)):
+        try:
+            m[doc.page_xref(i)] = i
+        except Exception:
+            pass
+    return m
+
+_page_xref_map = _build_page_xref_map(doc)
+
+def _xref_int_from_ref(ref_str: str):
+    """Parse '42 0 R' -> 42, or a bare integer string -> int. Returns None on failure."""
+    # Indirect reference: '42 0 R'
+    m = re.match(r'^\s*(\d+)\s+0\s+R\s*$', ref_str.strip())
+    if m:
+        return int(m.group(1))
+    # Some PyMuPDF versions return a bare integer for type 'int' / 'xref'
+    m = re.match(r'^\s*(\d+)\s*$', ref_str.strip())
+    if m:
+        return int(m.group(1))
+    return None
+
+def _page_num_from_pg(struct_xref: int) -> int | None:
+    """
+    Try /Pg on the struct element itself.
+    Returns 0-based page index, or None if /Pg absent or unresolvable.
+    Handles PyMuPDF type strings: 'xref', 'ref', 'indirect', and bare 'int'.
+    """
+    try:
+        pg = doc.xref_get_key(struct_xref, 'Pg')
+        # Accept all indirect-reference type labels across PyMuPDF versions,
+        # plus bare integer (some versions return the xref number as type 'int').
+        if pg[0] in ('xref', 'ref', 'indirect', 'int'):
+            page_xref = _xref_int_from_ref(pg[1])
+            if page_xref is not None and page_xref in _page_xref_map:
+                return _page_xref_map[page_xref]
+    except Exception:
+        pass
+    return None
+
+def _mcids_from_struct(struct_xref: int) -> list[int]:
+    """
+    Collect MCID integer values directly under a struct element's /K array.
+    Handles: single inline MCID (type 'int'), mixed arrays containing bare
+    integers and/or MCID dicts (<</Type /MCR /MCID N ...>>).
+    Returns deduplicated list (may be empty).
+    """
+    mcids = []
+    try:
+        kids = doc.xref_get_key(struct_xref, 'K')
+        if kids[0] == 'int':
+            # Single inline MCID
+            mcids.append(int(kids[1]))
+        elif kids[0] in ('array', 'dict'):
+            raw = kids[1]
+            # Extract explicit /MCID dict entries first (most reliable)
+            for mcid_val in re.findall(r'/MCID\s+(\d+)', raw):
+                mcids.append(int(mcid_val))
+            if kids[0] == 'array' and not mcids:
+                # No MCID dicts found; look for bare integers in the array
+                # that are NOT part of an indirect reference (N 0 R).
+                # Match whole tokens: digit sequence not preceded or followed
+                # by other digits, and not immediately followed by ' 0 R'.
+                for m in re.finditer(r'\b(\d+)\b', raw):
+                    token = m.group(1)
+                    after = raw[m.end():]
+                    if not re.match(r'\s+0\s+R', after):
+                        mcids.append(int(token))
+    except Exception:
+        pass
+    return list(set(mcids))
+
+def _page_num_from_mcid_walk(struct_xref: int) -> int | None:
+    """
+    Walk the struct element's kids to find a MCID, then scan every page's
+    marked-content sequences to find which page owns that MCID.
+    Returns 0-based page index, or None if not found.
+    This is the fallback when /Pg is absent on the struct element.
+    """
+    mcids = _mcids_from_struct(struct_xref)
+    if not mcids:
+        return None
+
+    target_mcids = set(mcids)
+
+    for page_num in range(len(doc)):
+        try:
+            page = doc[page_num]
+            # get_text('rawdict') includes mcid in block metadata for image blocks
+            blocks = page.get_text('rawdict', flags=fitz.TEXT_PRESERVE_WHITESPACE).get('blocks', [])
+            for block in blocks:
+                if block.get('type') == 1 and block.get('mcid') in target_mcids:
+                    return page_num
+            # Scan raw content stream for BDC markers — covers figures that
+            # don't surface as image blocks in get_text (e.g. vector graphics,
+            # form XObjects tagged at the content-stream level).
+            content = page.read_contents().decode('latin-1', errors='replace')
+            for mcid in target_mcids:
+                if re.search(r'/MCID\s+' + str(mcid) + r'\b', content):
+                    return page_num
+        except Exception:
+            continue
+
+    return None
+
+def resolve_page_num(struct_xref: int) -> tuple[int, str]:
+    """
+    Return (page_num, resolution_label) for a Figure struct element.
+    Strategy 1: /Pg attribute on the struct element (O(1), most reliable).
+    Strategy 2: Walk kids to extract MCIDs, scan page content streams.
+    Fallback:   page 0 with label 'fallback' — caller should log a warning.
+
+    Returns a tuple so the caller never needs to invoke the helpers a second
+    time just to determine which strategy succeeded.
+    """
+    page_num = _page_num_from_pg(struct_xref)
+    if page_num is not None:
+        return page_num, 'pg_attr'
+
+    page_num = _page_num_from_mcid_walk(struct_xref)
+    if page_num is not None:
+        return page_num, 'mcid_walk'
+
+    return 0, 'fallback'
+
+# ── Main struct tree walk ─────────────────────────────────────────────────────
+
 struct_root_xref = int(struct_tree_ref[1].split()[0])
 fig_index = 0
 
@@ -178,6 +303,11 @@ for xref, s_type, alt in walk_struct(struct_root_xref, doc):
             new_alt = f'[Figure {fig_index + 1} — alt text required]'
             doc.xref_set_key(xref, 'Alt', fitz.get_pdf_str(new_alt))
             set_lang_on_element(xref, doc, args.language)
+
+            # resolve_page_num returns (page_num, label) in one call —
+            # no redundant re-invocation of the expensive MCID walk.
+            page_num, page_resolution = resolve_page_num(xref)
+
             changes.append({
                 'xref':         xref,
                 'figure_index': fig_index,
@@ -186,8 +316,10 @@ for xref, s_type, alt in walk_struct(struct_root_xref, doc):
                 'lang_set':     args.language,
             })
             needs_review.append({
-                'xref':         xref,
-                'figure_index': fig_index,
+                'struct_xref':     xref,           # struct element xref (for reference only)
+                'figure_index':    fig_index,
+                'page_num':        page_num,        # 0-based; used by generate_alt_text_drafts.py
+                'page_resolution': page_resolution, # 'pg_attr' | 'mcid_walk' | 'fallback'
             })
 
     fig_index += 1

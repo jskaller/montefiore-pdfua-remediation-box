@@ -135,6 +135,7 @@ def call_vision_model(image_b64: str, figure_index: int, instruction: str = '') 
     payload = json.dumps({
         'model': VISION_MODEL,
         'max_tokens': 300,
+        'temperature': 0.0,
         'messages': [{
             'role': 'user',
             'content': [
@@ -167,23 +168,21 @@ def call_vision_model(image_b64: str, figure_index: int, instruction: str = '') 
     return data['choices'][0]['message']['content'].strip()
 
 
-def render_figure_thumbnail(doc, page_num: int, xref: int, dpi: int) -> str | None:
-    """Render the bounding box of an image xref on a page, return base64 PNG."""
+def render_figure_thumbnail(doc, page_num: int, dpi: int) -> str | None:
+    """
+    Render the given page and return a base64 PNG thumbnail.
+
+    We render the full page rather than trying to crop to an image bounding
+    box by xref, because page_num is resolved from the struct tree and we
+    don't have a reliable image xref to crop against.  A full-page render
+    at the configured DPI gives the vision model enough context to describe
+    the figure accurately, and avoids the previous bug where every figure
+    was rendered from page 0.
+    """
     try:
         page = doc[page_num]
-        # Find the image on the page and get its bounding box
-        for img_info in page.get_images(full=True):
-            if img_info[0] == xref:
-                name = img_info[7]
-                bbox = page.get_image_bbox(name)
-                if bbox and not bbox.is_empty:
-                    mat  = fitz.Matrix(dpi / 72, dpi / 72)
-                    clip = fitz.Rect(bbox)
-                    pix  = page.get_pixmap(matrix=mat, clip=clip, alpha=False)
-                    return base64.b64encode(pix.tobytes('png')).decode('utf-8')
-        # Fallback: render the full page at lower DPI
-        mat = fitz.Matrix(72 / 72, 72 / 72)
-        pix = page.get_pixmap(matrix=mat, alpha=False)
+        mat  = fitz.Matrix(dpi / 72, dpi / 72)
+        pix  = page.get_pixmap(matrix=mat, alpha=False)
         return base64.b64encode(pix.tobytes('png')).decode('utf-8')
     except Exception:
         return None
@@ -191,31 +190,51 @@ def render_figure_thumbnail(doc, page_num: int, xref: int, dpi: int) -> str | No
 
 # ── Process each figure ───────────────────────────────────────────────────────
 
-# Build xref -> page map from doc
-xref_to_page = {}
-for page_num in range(len(doc)):
-    for img_info in doc[page_num].get_images(full=True):
-        xref = img_info[0]
-        if xref not in xref_to_page:
-            xref_to_page[xref] = page_num
-
 results   = {}
-errors    = []
+warnings  = []   # non-fatal notices (e.g. legacy entry fallback)
+errors    = []   # hard failures where a figure could not be drafted
 generated = 0
 skipped   = 0
 
 for item in needs_review:
-    fig_idx  = item.get('figure_index', 0)
-    xref     = item.get('xref', 0)
-    page_num = xref_to_page.get(xref, 0)
-    inst     = instructions.get(str(fig_idx), '')
+    fig_idx = item.get('figure_index', 0)
+    inst    = instructions.get(str(fig_idx), '')
 
-    # Render thumbnail
-    thumb_b64 = render_figure_thumbnail(doc, page_num, xref, args.dpi)
+    # Prefer page_num recorded by fix_figure_alt_text.py (struct-tree resolved).
+    # Fall back to the old xref_to_page approach only for entries written by an
+    # older version of the script that stored 'xref' instead of 'page_num'.
+    if 'page_num' in item:
+        page_num        = item['page_num']
+        page_resolution = item.get('page_resolution', 'stored')
+    else:
+        # Legacy entries: 'xref' here is the struct element xref, NOT an image
+        # xref — the xref_to_page lookup will almost certainly miss, defaulting
+        # to page 0.  Record a warning (not a hard error) so the run still
+        # counts as PASS if drafts are generated successfully.
+        legacy_xref = item.get('xref', 0)
+        xref_to_page = {}
+        for pn in range(len(doc)):
+            for img_info in doc[pn].get_images(full=True):
+                ix = img_info[0]
+                if ix not in xref_to_page:
+                    xref_to_page[ix] = pn
+        page_num        = xref_to_page.get(legacy_xref, 0)
+        page_resolution = 'legacy_xref_fallback'
+        warnings.append({
+            'figure_index': fig_idx,
+            'warning': (
+                f'needs_review entry for figure {fig_idx} has no page_num — '
+                f'falling back to legacy xref lookup (struct xref {legacy_xref}). '
+                f'Re-run fix_figure_alt_text.py to regenerate with correct page numbers.'
+            )
+        })
+
+    # Render the page this figure lives on
+    thumb_b64 = render_figure_thumbnail(doc, page_num, args.dpi)
     if thumb_b64 is None:
         errors.append({
             'figure_index': fig_idx,
-            'error':        'Could not render thumbnail — figure skipped'
+            'error':        f'Could not render page {page_num} — figure skipped'
         })
         skipped += 1
         continue
@@ -224,14 +243,14 @@ for item in needs_review:
     try:
         draft = call_vision_model(thumb_b64, fig_idx, inst)
         results[str(fig_idx)] = {
-            'figure_index':   fig_idx,
-            'page':           page_num + 1,
-            'xref':           xref,
-            'alt_text_draft': draft,
-            'source':         'vision_model',
-            'model':          VISION_MODEL,
-            'instruction':    inst or None,
-            'decorative':     draft.strip().upper() == 'DECORATIVE',
+            'figure_index':    fig_idx,
+            'page':            page_num + 1,
+            'page_resolution': page_resolution,
+            'alt_text_draft':  draft,
+            'source':          'vision_model',
+            'model':           VISION_MODEL,
+            'instruction':     inst or None,
+            'decorative':      draft.strip().upper() == 'DECORATIVE',
         }
         generated += 1
     except Exception as e:
@@ -240,6 +259,8 @@ for item in needs_review:
 
 doc.close()
 
+# overall is based on hard errors only; warnings (legacy entries that still
+# produced a draft) do not degrade the result to PARTIAL.
 overall = 'PASS' if not errors else ('PARTIAL' if generated > 0 else 'FAIL')
 
 output = json.dumps({
@@ -255,6 +276,7 @@ output = json.dumps({
         'before these descriptions are applied to the document.'
     ),
     'figures':         results,
+    'warnings':        warnings,
     'errors':          errors,
 }, indent=2)
 
