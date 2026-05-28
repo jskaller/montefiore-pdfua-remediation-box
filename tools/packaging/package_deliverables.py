@@ -10,15 +10,19 @@ inside the job directory for reference and archiving.
 Usage:
   package_deliverables.py <job-dir> <remediated-pdf> \
     --output-dir <output-dir> \
-    [--source-pdf original.pdf]
+    [--source-pdf original.pdf] \
+    [--skip-pdf]
 
   <job-dir>       jobs/{TICKET}_{basename}/ — intermediate work directory
   <remediated-pdf> final repaired PDF path
   --output-dir    output/{TICKET}_remediated/ — final deliverables destination
   --source-pdf    original source PDF (for preservation comparison reference)
+  --skip-pdf      write audit report only, do not copy PDF to output-dir
+                  (used for FAIL/ESCALATION outcomes where no remediated PDF
+                  should be handed off)
 
 Output:
-  $OUTPUT_DIR/{basename}_remediated.pdf   ← final PDF
+  $OUTPUT_DIR/{basename}_remediated.pdf   ← final PDF (unless --skip-pdf)
   $OUTPUT_DIR/{basename}_AUDIT_REPORT.md  ← human-readable audit summary
 
 Exit codes:
@@ -35,6 +39,8 @@ parser.add_argument('remediated_pdf')
 parser.add_argument('--output-dir', default=None,
                     help='Final deliverables destination (output/{TICKET}_remediated/)')
 parser.add_argument('--source-pdf', default='')
+parser.add_argument('--skip-pdf', action='store_true',
+                    help='Write audit report only — do not copy PDF to output-dir')
 args = parser.parse_args()
 
 job_dir  = Path(args.job_dir)
@@ -202,26 +208,33 @@ should run these before final sign-off.
 out_pdf_name    = f'{basename}_remediated.pdf'
 out_report_name = f'{basename}_AUDIT_REPORT.md'
 
-out_pdf    = output_dir / out_pdf_name
 out_report = output_dir / out_report_name
-
-shutil.copy2(pdf_src, out_pdf)
 out_report.write_text(audit_report)
 
-# Checksum the output files
-out_checksum = f'{sha256(out_pdf)}  {out_pdf_name}\n'
-out_checksum += f'{sha256(out_report)}  {out_report_name}\n'
+deliverables = {
+    'audit_report': str(out_report),
+}
+
+if not args.skip_pdf:
+    out_pdf = output_dir / out_pdf_name
+    shutil.copy2(pdf_src, out_pdf)
+    deliverables['pdf'] = str(out_pdf)
+    # Checksum both output files
+    out_checksum  = f'{sha256(out_pdf)}  {out_pdf_name}\n'
+    out_checksum += f'{sha256(out_report)}  {out_report_name}\n'
+else:
+    # Audit report only — no PDF handed off for FAIL/ESCALATION
+    out_checksum = f'{sha256(out_report)}  {out_report_name}\n'
+
 (output_dir / 'SHA256SUMS.txt').write_text(out_checksum)
+deliverables['checksums'] = str(output_dir / 'SHA256SUMS.txt')
 
 print(json.dumps({
     'result':      'OK',
     'job_dir':     str(job_dir),
     'output_dir':  str(output_dir),
-    'deliverables': {
-        'pdf':          str(out_pdf),
-        'audit_report': str(out_report),
-        'checksums':    str(output_dir / 'SHA256SUMS.txt'),
-    },
+    'skip_pdf':    args.skip_pdf,
+    'deliverables': deliverables,
     'internal_package': {
         'pdf':       str(dest_pdf_internal),
         'checksums': str(job_dir / 'SHA256SUMS.txt'),

@@ -1281,10 +1281,24 @@ elif overall in ('FAIL', 'ESCALATION'):
     failed_dir = OUT / 'failed'
     failed_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copy audit report only — never the remediated PDF
-    audit_report_src = JOB / 'reports' / f'{SAFE_BASE}_AUDIT_REPORT.md'
-    if audit_report_src.exists():
-        shutil.copy2(audit_report_src, failed_dir / audit_report_src.name)
+    # Generate audit report into failed/ — no remediated PDF
+    emit('PACKAGE', 'package_deliverables', 'RUNNING')
+    rc, out, _ = run(
+        ['python3', TOOLS/'packaging'/'package_deliverables.py',
+         JOB, FINAL_PDF,
+         '--output-dir', str(failed_dir),
+         '--source-pdf', str(SOURCE_PDF),
+         '--skip-pdf'],
+        'package_deliverables_fail'
+    )
+    pkg_fail_data = {}
+    try:
+        pkg_fail_data = json.loads(out)
+    except Exception:
+        pass
+    emit('PACKAGE', 'package_deliverables',
+         get_result(pkg_fail_data) if pkg_fail_data else ('PASS' if rc == 0 else 'FAIL'),
+         note=f'Audit report at {failed_dir}')
 
     # Write escalation report
     escalation_report = failed_dir / 'ESCALATION_REPORT.md'
@@ -1317,8 +1331,6 @@ elif overall in ('FAIL', 'ESCALATION'):
 
     emit('PACKAGE', 'escalation_report', 'PASS',
          note=f'Escalation report at {escalation_report}')
-    emit('PACKAGE', 'package_deliverables', 'SKIPPED',
-         note=f'FAIL/ESCALATION — no remediated PDF packaged. Audit report at {failed_dir}')
 
 # Post-job knowledge update
 emit('PACKAGE', 'post_job_indexer', 'RUNNING')
