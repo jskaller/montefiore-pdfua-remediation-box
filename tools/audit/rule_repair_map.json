@@ -15,7 +15,7 @@
     "openclaw_triggers": "The orchestrator emits an OPENCLAW_REQUIRED signal when: (a) manual:true and strategies is empty, (b) all strategies exhausted with no PASS, (c) rule_id not found in map at all (unknown_rule). The signal includes rule_id, description, all strategy attempt history with failure reasons, and document tags. The agent reads the signal and either writes a new script or escalates to the operator if automation is not possible. For unknown rules, the agent researches the rule before writing.",
     "repair_order_note": "repair_order within each strategy matches the mandatory sequence. fix_table_headers.py (order 10) MUST be last \u2014 no saves may occur after it. fix_table_tagging.py (order 9) MUST run before fix_table_headers.py.",
     "confirmed_jobs": 7,
-    "last_updated": "2026-05-27"
+    "last_updated": "2026-05-28"
   },
   "rules": {
     "PDF/UA-1/5": {
@@ -472,9 +472,14 @@
     },
     "PDF/UA-1/7.4.2": {
       "clause": "7.4.2",
-      "description": "Document uses numbered headings but the first heading tag is not H1",
-      "manual": true,
-      "strategies": []
+      "description": "Heading nesting level incorrect \u2014 heading element not at correct level for document structure (SEHn)",
+      "repair_script": null,
+      "repair_order": null,
+      "run_last": false,
+      "args_pattern": null,
+      "confidence": "OPENCLAW_REQUIRED",
+      "confirmed_jobs": 0,
+      "notes": "First seen on MM-TEST3. Heading hierarchy incorrect for non-strongly-structured document. Requires new fix_heading_hierarchy.py script."
     },
     "PDF/UA-1/7.4.4": {
       "clause": "7.4.4",
@@ -676,9 +681,14 @@
     },
     "PDF/UA-1/7.18.4": {
       "clause": "7.18.4",
-      "description": "Widget annotation is not nested within a Form tag",
-      "manual": true,
-      "strategies": []
+      "description": "Widget annotation not nested within a Form tag in the structure tree",
+      "repair_script": null,
+      "repair_order": null,
+      "run_last": false,
+      "args_pattern": null,
+      "confidence": "OPENCLAW_REQUIRED",
+      "confirmed_jobs": 0,
+      "notes": "First seen on MM-TEST3 (470 failures). Form widget annotations must be wrapped in /Form struct elements. Requires new fix_form_widget_tagging.py script. Related but distinct from 7.18.3-1."
     },
     "PDF/UA-1/7.18.5": {
       "clause": "7.18.5",
@@ -740,9 +750,14 @@
     },
     "PDF/UA-1/7.21.3.2": {
       "clause": "7.21.3.2",
-      "description": "Type 2 CID font contains invalid or missing CIDToGIDMap entry",
-      "manual": true,
-      "strategies": []
+      "description": "Embedded Type 2 CIDFont missing CIDToGIDMap entry in CIDFont dictionary",
+      "repair_script": null,
+      "repair_order": null,
+      "run_last": false,
+      "args_pattern": null,
+      "confidence": "OPENCLAW_REQUIRED",
+      "confirmed_jobs": 0,
+      "notes": "First seen on MM-TEST3 (20 failures). fix_cidset.py removes CIDSet but does not add CIDToGIDMap. Requires new script to add /CIDToGIDMap /Identity to affected CIDFont dictionaries."
     },
     "PDF/UA-1/7.21.4.2": {
       "clause": "7.21.4.2",
@@ -828,9 +843,14 @@
     },
     "PDF/UA-1/7.21.7": {
       "clause": "7.21.7",
-      "description": "Font dictionary missing ToUnicode entry, or ToUnicode CMap contains zero or invalid Unicode values (U+0000, U+FEFF, U+FFFE)",
-      "manual": true,
-      "strategies": []
+      "description": "Font dictionary missing ToUnicode map \u2014 character codes cannot be mapped to Unicode values",
+      "repair_script": null,
+      "repair_order": null,
+      "run_last": false,
+      "args_pattern": null,
+      "confidence": "OPENCLAW_REQUIRED",
+      "confirmed_jobs": 0,
+      "notes": "First seen on MM-TEST3 (30 failures). fix_notdef_glyphs.py is audit-only and cannot repair. Requires new script to add ToUnicode CMap streams to affected fonts."
     },
     "ISO_32000-1/Annex_L_888": {
       "clause": "Annex_L",
