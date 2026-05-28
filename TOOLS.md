@@ -1,77 +1,71 @@
 # Tools and Conventions
 
+This document captures stable conventions only. For per-script invocation
+details, read the script's docstring directly — those are the source of truth
+and will be kept in sync with code changes.
+
 ## Binary paths (inside Docker container)
 
 | Tool | Path |
 |------|------|
-| veraPDF | `/opt/verapdf/arlington-pdf-model-checker` |
 | qpdf | `/usr/bin/qpdf` |
 | python3 | `/usr/bin/python3` |
 | java | `/usr/bin/java` |
 | bash | `/usr/bin/bash` |
+| ocrmypdf | `/usr/bin/ocrmypdf` |
 
-## Script paths (relative to workspace root)
+veraPDF binaries and validation profiles are configured by the container
+environment. The orchestrator (`remediate.py`) resolves them; agents and
+scripts should not hardcode their paths.
 
-All scripts are under `tools/` and take `<input> <output>` arguments.
-All scripts output JSON to stdout and exit 0 on pass, 1 on fail, 2 on error.
+## Script conventions
 
-### Audit (read-only)
-```
-tools/audit/run_verapdf_profiles.sh    <verapdf-bin> <profiles-root> <pdf> <out-dir>
-tools/audit/run_qpdf_check.sh          <pdf> <out-dir> [--linearize]
-tools/audit/parse_verapdf_summary.py   <xml> [<xml2> ...]
-tools/audit/metadata_xmp_parity_audit.py  <pdf> [--org "Org Name"]
-tools/audit/font_inventory.py          <pdf>
-tools/audit/font_geometry_matcher.py   <text-sample> <font1.ttf> [font2.ttf ...]
-tools/audit/table_semantics_audit.py   <pdf>
-tools/audit/contrast_audit.py          <pdf>
-tools/audit/detect_image_only_pages.py <pdf> [--min-chars N]
-tools/audit/metadata_xmp_parity_audit.py  <pdf> [--out results.json]
-```
+All scripts under `tools/` follow these conventions:
 
-### Repair (modifies PDFs — always write to new output path)
-```
-tools/repair/fix_pdfua_identifier.py              <in.pdf> <out.pdf>
-tools/repair/fix_metadata_xmp_parity.py           <in.pdf> <out.pdf> [--title X] [--subject X] [--description X] [--keywords X]
-tools/repair/fix_figure_alt_text.py               <in.pdf> <out.pdf> [--alt-map map.json]
-tools/repair/fix_table_headers.py                 <in.pdf> <out.pdf>
-tools/repair/fix_link_annotation_descriptions.py  <in.pdf> <out.pdf>
-tools/repair/fix_list_numbering.py                <in.pdf> <out.pdf>
-tools/repair/fix_notdef_glyphs.py                 <pdf>          (audit only, no output)
-tools/repair/fix_parent_tree_mcids.py             <in.pdf> <out.pdf>
-tools/repair/fix_contrast_color_runs.py           <pdf>          (audit only, no output)
-tools/repair/font_replacement_report.py           <pdf>          (audit only, no output)
-tools/repair/fix_cidset.py                        <in.pdf> <out.pdf> [--out results.json]
-tools/repair/generate_alt_text_drafts.py          <pdf> --fix-output <json> --out <alt_map_draft.json>
-tools/repair/generate_alt_text_review_report.py   <pdf> --draft <json> --out <html> --map-out <json>
-```
+- **Arguments:** positional `<input>` and `<output>` paths, optional flags
+- **Output:** JSON to stdout
+- **Exit codes:** 0 on pass, 1 on fail, 2 on error
+- **Read-only inputs:** scripts never modify their input paths
+- **Audit scripts** (under `tools/audit/`): read-only, no PDF modification
+- **Repair scripts** (under `tools/repair/`): write to a new output path; never overwrite source
+- **QA scripts** (under `tools/qa/`): comparative checks, write artifacts to a specified output directory
 
-### QA
-```
-tools/qa/preservation_audit.py  <source.pdf> <output.pdf>
-tools/qa/render_compare.py      <source.pdf> <output.pdf> <out-dir> [--dpi 150] [--threshold 0.01]
-tools/qa/visual_qa.py           <pdf> <out-dir> [--dpi 96]
-```
+For exact invocation of a specific script, run it with `--help` or read the
+docstring at the top of the file.
 
-### Packaging
+## Orchestration
+
+The orchestrator (`tools/orchestrate/remediate.py`) is the entry point for
+all remediation jobs. It owns invocation of audit, repair, QA, and
+packaging scripts. Agents should not invoke individual scripts manually
+during a job — the orchestrator handles ordering, dependencies, and
+intermediate file management.
+
+## Path conventions
+
 ```
-tools/packaging/package_scaffold.py     <output-base-dir> <job-name>
-tools/packaging/package_deliverables.py <job-dir> <remediated-pdf> [--source-pdf original.pdf]
-tools/packaging/status_json_writer.py   <job-dir> [--pdf original.pdf] [--out STATUS.json]
-tools/packaging/checksums.py            generate <dir> [--out SHA256SUMS.txt]
-tools/packaging/checksums.py            verify   <dir> <SHA256SUMS.txt>
-tools/packaging/cleanup_job.py          <job_name> [--confirm] [--ticket TICKET]
+workspace/
+├── input/{TICKET}/         ← source PDFs (read-only)
+├── jobs/{TICKET}_{basename}/
+│   ├── audit/              ← audit JSON outputs, veraPDF XMLs, sidecars
+│   ├── repair/             ← intermediate PDFs (pass0, pass1, ...)
+│   ├── qa/                 ← render compare images, visual QA renders
+│   ├── reports/            ← alt text review HTML, alt maps
+│   └── STATUS.json
+├── output/{TICKET}_remediated/
+│   ├── {basename}_remediated.pdf       ← only on PASS
+│   ├── {basename}_AUDIT_REPORT.md
+│   ├── review/                         ← on REVIEW_REQUIRED
+│   └── failed/                         ← on FAIL or ESCALATION
+│       └── ESCALATION_REPORT.md
+└── assets/
+    ├── alt_maps/                       ← cross-job approved alt text maps
+    └── validation_profiles/            ← veraPDF profiles
 ```
 
-## veraPDF profiles root
+## Rules
 
-`/app/workspace/assets/validation_profiles/veraPDF-validation-profiles-integration`
-
-Pinned WCAG profile: `PDF_UA/WCAG-2-2-Machine.xml` relative to profiles root.
-
-## Naming conventions
-
-- Job names: `<basename>_pdfua_<YYYY-MM-DD>` e.g. `annual_report_pdfua_2026-05-22`
-- Intermediate repair passes: `<basename>_pass1.pdf`, `_pass2.pdf`, etc.
-- Final output: `<basename>_pdfua_final.pdf`
-- Never overwrite source PDFs — always write to a new path
+- Never overwrite source PDFs — always write to a new path under `repair/`
+- Never write to `workspace/output/` during remediation — the orchestrator owns packaging
+- Intermediate PDFs in `jobs/{ticket}_{basename}/repair/` are named `pass0_source.pdf`, `pass1_<script>.pdf`, etc.
+- Final deliverables in `output/` are named `{basename}_remediated.pdf` and `{basename}_AUDIT_REPORT.md`
