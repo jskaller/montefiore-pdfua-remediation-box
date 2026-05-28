@@ -604,7 +604,7 @@ def build_parent_tree(pdf_pike):
         if sp is None or not mcid_map:
             continue
         max_mcid = max(mcid_map.keys())
-        arr = pikepdf.Array([pikepdf.Integer(0)] * (max_mcid + 1))
+        arr = pikepdf.Array([pikepdf.Null()] * (max_mcid + 1))
         for mcid, elem in mcid_map.items():
             try:
                 arr[mcid] = pdf_pike.make_indirect(elem)
