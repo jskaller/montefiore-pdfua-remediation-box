@@ -102,7 +102,9 @@ python3 tools/orchestrate/remediate.py \
 
 4. Watch for `DEVIATION` and `OPENCLAW_REQUIRED` signals — these are the only steps needing your reasoning.
 
-5. Report the final summary when `"phase": "COMPLETE"` appears, following the format above.
+5. When `"phase": "OPENCLAW_REQUIRED"` appears **during the run**, act on it immediately — do not wait for `COMPLETE`. Write the required repair script, register it in the rule map, then re-run the orchestrator so it can retry. Only proceed to step 6 when all OPENCLAW_REQUIRED signals have been resolved or determined to be unsolvable.
+
+6. Report the final summary when `"phase": "COMPLETE"` appears, following the format above. If any OPENCLAW_REQUIRED signals were emitted and not resolved, the summary must list them explicitly as unresolved escalations.
 
 **Do not run individual audit or repair scripts manually.**
 If `tools/orchestrate/remediate.py` is missing, stop and report it.
