@@ -31,7 +31,7 @@ Rule:    <rule file if changed, or "none">
 - `feat` — new capability (new script + new rule)
 - `fix` — bug fix in existing script
 - `rule` — rule clarification with no script change
-- `config` — .env.example, GATEWAY_CONFIG.md, docker-compose changes
+- `config` — .env.example, docker-compose, docker-init.sh changes
 - `docs` — WORKFLOW.md, CONTRIBUTING.md, MANIFEST.md, README
 
 **Examples:**
@@ -131,13 +131,19 @@ check before committing.
 
 ---
 
-## Adding a new provider to GATEWAY_CONFIG.md
+## Adding a new provider
 
-1. Add a Quick Start block to `GATEWAY_CONFIG.md` with the exact env vars.
-2. Add the same block as a comment example in `.env.example`.
+All provider configuration lives in `.env.example`. Adding a new provider
+means adding a new commented block there.
+
+1. Add a commented block to `.env.example` showing the provider's required
+   env vars (`PRIMARY_PROVIDER_BASE_URL`, `PRIMARY_PROVIDER_API_KEY`,
+   `PRIMARY_MODEL`, and vision equivalents).
+2. Include a link to the provider's API key page in the comment header.
 3. Verify the model IDs against the provider's live catalog before committing —
    model ID strings change and wrong ones waste everyone's time.
-4. Commit as `config(gateway): add <provider> quick start block`.
+4. Test against a real PDF before committing if possible.
+5. Commit as `config(env): add <provider> example block`.
 
 ---
 
