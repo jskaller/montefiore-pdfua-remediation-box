@@ -5,22 +5,22 @@
     "purpose": "Maps veraPDF rule IDs to ordered repair strategies. The orchestrator looks up each failing rule ID here, sorts strategies by pass_rate desc / pass_count desc / doc_tag_overlap desc, and tries them in order. If all strategies fail or strategies array is empty, OpenClaw is invoked to write a new script.",
     "key_format": "{normalised_spec}/{clause}  e.g. PDF/UA-1/7.18.6.3",
     "normalisation": "veraPDF Greenfield profiles output rule IDs normalised to PDF/UA-1 prefix by parse_verapdf_summary.py.",
-    "schema_version_notes": "v2.0.0 \u2014 flat repair_script replaced by strategies array. Each rule has manual:true/false flag. manual:true routes directly to OpenClaw. Strategies sorted by pass_rate desc, pass_count desc, doc_tag_overlap desc before execution.",
+    "schema_version_notes": "v2.0.0 — flat repair_script replaced by strategies array. Each rule has manual:true/false flag. manual:true routes directly to OpenClaw. Strategies sorted by pass_rate desc, pass_count desc, doc_tag_overlap desc before execution.",
     "confidence_levels": {
-      "CONFIRMED": "Verified on at least one real Montefiore job \u2014 outcome was PASS",
-      "EXPECTED": "Correct per ISO 14289-1 spec + veraPDF rule definitions \u2014 not yet confirmed on a Montefiore job",
-      "NEW": "Written by OpenClaw \u2014 pass_count < 2, treat with extra scrutiny"
+      "CONFIRMED": "Verified on at least one real Montefiore job — outcome was PASS",
+      "EXPECTED": "Correct per ISO 14289-1 spec + veraPDF rule definitions — not yet confirmed on a Montefiore job",
+      "NEW": "Written by OpenClaw — pass_count < 2, treat with extra scrutiny"
     },
-    "strategy_ordering": "Sort strategies by: (1) pass_rate descending, (2) pass_count descending as tiebreaker, (3) doc_tag_overlap_score descending as final tiebreaker. Never exclude a strategy based on doc type \u2014 doc type affects ordering only, not eligibility. Skip strategies whose known_failure_modes match the current document's observed failure reason.",
+    "strategy_ordering": "Sort strategies by: (1) pass_rate descending, (2) pass_count descending as tiebreaker, (3) doc_tag_overlap_score descending as final tiebreaker. Never exclude a strategy based on doc type — doc type affects ordering only, not eligibility. Skip strategies whose known_failure_modes match the current document's observed failure reason.",
     "openclaw_triggers": "The orchestrator emits an OPENCLAW_REQUIRED signal when: (a) manual:true and strategies is empty, (b) all strategies exhausted with no PASS, (c) rule_id not found in map at all (unknown_rule). The signal includes rule_id, description, all strategy attempt history with failure reasons, and document tags. The agent reads the signal and either writes a new script or escalates to the operator if automation is not possible. For unknown rules, the agent researches the rule before writing.",
-    "repair_order_note": "repair_order within each strategy matches the mandatory sequence. fix_table_headers.py (order 10) MUST be last \u2014 no saves may occur after it. fix_table_tagging.py (order 9) MUST run before fix_table_headers.py.",
+    "repair_order_note": "repair_order within each strategy matches the mandatory sequence. fix_table_headers.py (order 10) MUST be last — no saves may occur after it. fix_table_tagging.py (order 9) MUST run before fix_table_headers.py.",
     "confirmed_jobs": 7,
     "last_updated": "2026-05-28"
   },
   "rules": {
     "PDF/UA-1/5": {
       "clause": "5",
-      "description": "Document does not conform to PDF/UA-1 \u2014 missing or incorrect pdfuaid identifier",
+      "description": "Document does not conform to PDF/UA-1 — missing or incorrect pdfuaid identifier",
       "manual": false,
       "strategies": [
         {
@@ -73,7 +73,9 @@
           "script_used": "tools/repair/fix_pdfua_identifier.py",
           "note": ""
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/6.2": {
       "clause": "6.2",
@@ -104,7 +106,9 @@
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/6.7.2": {
       "clause": "6.7.2",
@@ -124,7 +128,9 @@
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/6.2.11.8": {
       "clause": "6.2.11.8",
@@ -155,7 +161,9 @@
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.1-content-unmarked": {
       "clause": "7.1",
@@ -181,11 +189,13 @@
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.1-untagged": {
       "clause": "7.1",
-      "description": "Document has no StructTreeRoot \u2014 document is not tagged at all",
+      "description": "Document has no StructTreeRoot — document is not tagged at all",
       "manual": false,
       "strategies": [
         {
@@ -207,11 +217,13 @@
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.1": {
       "clause": "7.1",
-      "description": "Document-level conformance failures \u2014 covers tagged PDF, viewer preferences, language, and catalog requirements",
+      "description": "Document-level conformance failures — covers tagged PDF, viewer preferences, language, and catalog requirements",
       "manual": false,
       "strategies": [
         {
@@ -264,7 +276,9 @@
           "script_used": "tools/repair/fix_metadata_xmp_parity.py",
           "note": ""
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.1-1": {
       "clause": "7.1-1",
@@ -284,7 +298,9 @@
           "known_failure_modes": [],
           "confidence": "EXPECTED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.1-2": {
       "clause": "7.1-2",
@@ -304,7 +320,9 @@
           "known_failure_modes": [],
           "confidence": "EXPECTED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.1-3": {
       "clause": "7.1-3",
@@ -324,11 +342,13 @@
           "known_failure_modes": [],
           "confidence": "EXPECTED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.2": {
       "clause": "7.2",
-      "description": "Natural language for text cannot be determined \u2014 missing /Lang on struct elements or document catalog",
+      "description": "Natural language for text cannot be determined — missing /Lang on struct elements or document catalog",
       "manual": false,
       "strategies": [
         {
@@ -350,11 +370,13 @@
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": true
     },
     "PDF/UA-1/7.2-1": {
       "clause": "7.2-1",
-      "description": "Real content not tagged \u2014 content outside struct tree",
+      "description": "Real content not tagged — content outside struct tree",
       "manual": false,
       "strategies": [
         {
@@ -370,7 +392,9 @@
           "known_failure_modes": [],
           "confidence": "EXPECTED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.3": {
       "clause": "7.3",
@@ -422,7 +446,9 @@
           "script_used": "tools/repair/fix_figure_alt_text.py",
           "note": ""
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": true
     },
     "PDF/UA-1/7.3-1": {
       "clause": "7.3-1",
@@ -448,7 +474,9 @@
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": true
     },
     "PDF/UA-1/7.3-3": {
       "clause": "7.3-3",
@@ -468,18 +496,22 @@
           "known_failure_modes": [],
           "confidence": "EXPECTED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": true
     },
     "PDF/UA-1/7.4.2": {
       "clause": "7.4.2",
-      "description": "Heading nesting level incorrect \u2014 heading element not at correct level for document structure (SEHn)",
+      "description": "Heading nesting level incorrect — heading element not at correct level for document structure (SEHn)",
       "repair_script": null,
       "repair_order": null,
       "run_last": false,
       "args_pattern": null,
       "confidence": "OPENCLAW_REQUIRED",
       "confirmed_jobs": 0,
-      "notes": "First seen on MM-TEST3. Heading hierarchy incorrect for non-strongly-structured document. Requires new fix_heading_hierarchy.py script."
+      "notes": "First seen on MM-TEST3. Heading hierarchy incorrect for non-strongly-structured document. Requires new fix_heading_hierarchy.py script.",
+      "resolvability": "repairable_unbuilt",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.4.4": {
       "clause": "7.4.4",
@@ -507,7 +539,9 @@
           ],
           "confidence": "CONFIRMED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.5-1": {
       "clause": "7.5-1",
@@ -533,7 +567,9 @@
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.5-2": {
       "clause": "7.5-2",
@@ -553,7 +589,9 @@
           "known_failure_modes": [],
           "confidence": "EXPECTED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.6-1": {
       "clause": "7.6-1",
@@ -573,7 +611,9 @@
           "known_failure_modes": [],
           "confidence": "EXPECTED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.18.1": {
       "clause": "7.18.1",
@@ -625,7 +665,9 @@
           "script_used": "tools/repair/fix_link_annotation_descriptions.py",
           "note": ""
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.18.1-1": {
       "clause": "7.18.1-1",
@@ -645,7 +687,9 @@
           "known_failure_modes": [],
           "confidence": "EXPECTED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.18.3": {
       "clause": "7.18.3",
@@ -671,13 +715,17 @@
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.18.3-1": {
       "clause": "7.18.3-1",
       "description": "Widget annotation not tagged or missing struct tree entry",
       "manual": true,
-      "strategies": []
+      "strategies": [],
+      "resolvability": "repairable_review",
+      "emits_review_artifact": true
     },
     "PDF/UA-1/7.18.4": {
       "clause": "7.18.4",
@@ -688,7 +736,9 @@
       "args_pattern": null,
       "confidence": "OPENCLAW_REQUIRED",
       "confirmed_jobs": 0,
-      "notes": "First seen on MM-TEST3 (470 failures). Form widget annotations must be wrapped in /Form struct elements. Requires new fix_form_widget_tagging.py script. Related but distinct from 7.18.3-1."
+      "notes": "First seen on MM-TEST3 (470 failures). Form widget annotations must be wrapped in /Form struct elements. Requires new fix_form_widget_tagging.py script. Related but distinct from 7.18.3-1.",
+      "resolvability": "repairable_unbuilt",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.18.5": {
       "clause": "7.18.5",
@@ -740,13 +790,17 @@
           "script_used": "tools/repair/fix_link_annotation_descriptions.py",
           "note": ""
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.21.3-1": {
       "clause": "7.21.3-1",
       "description": "Font not embedded",
       "manual": true,
-      "strategies": []
+      "strategies": [],
+      "resolvability": "repairable_review",
+      "emits_review_artifact": true
     },
     "PDF/UA-1/7.21.3.2": {
       "clause": "7.21.3.2",
@@ -757,7 +811,9 @@
       "args_pattern": null,
       "confidence": "OPENCLAW_REQUIRED",
       "confirmed_jobs": 0,
-      "notes": "First seen on MM-TEST3 (20 failures). fix_cidset.py removes CIDSet but does not add CIDToGIDMap. Requires new script to add /CIDToGIDMap /Identity to affected CIDFont dictionaries."
+      "notes": "First seen on MM-TEST3 (20 failures). fix_cidset.py removes CIDSet but does not add CIDToGIDMap. Requires new script to add /CIDToGIDMap /Identity to affected CIDFont dictionaries.",
+      "resolvability": "repairable_unbuilt",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.21.4.2": {
       "clause": "7.21.4.2",
@@ -788,7 +844,9 @@
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.21.4.2-1": {
       "clause": "7.21.4.2-1",
@@ -819,11 +877,13 @@
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.21.6-1": {
       "clause": "7.21.6-1",
-      "description": ".notdef glyph rendered \u2014 font has missing glyph mappings",
+      "description": ".notdef glyph rendered — font has missing glyph mappings",
       "manual": false,
       "strategies": [
         {
@@ -839,22 +899,26 @@
           "known_failure_modes": [],
           "confidence": "EXPECTED"
         }
-      ]
+      ],
+      "resolvability": "detector_mislabeled",
+      "emits_review_artifact": false
     },
     "PDF/UA-1/7.21.7": {
       "clause": "7.21.7",
-      "description": "Font dictionary missing ToUnicode map \u2014 character codes cannot be mapped to Unicode values",
+      "description": "Font dictionary missing ToUnicode map — character codes cannot be mapped to Unicode values",
       "repair_script": null,
       "repair_order": null,
       "run_last": false,
       "args_pattern": null,
       "confidence": "OPENCLAW_REQUIRED",
       "confirmed_jobs": 0,
-      "notes": "First seen on MM-TEST3 (30 failures). fix_notdef_glyphs.py is audit-only and cannot repair. Requires new script to add ToUnicode CMap streams to affected fonts."
+      "notes": "First seen on MM-TEST3 (30 failures). fix_notdef_glyphs.py is audit-only and cannot repair. Requires new script to add ToUnicode CMap streams to affected fonts.",
+      "resolvability": "repairable_unbuilt",
+      "emits_review_artifact": false
     },
     "ISO_32000-1/Annex_L_888": {
       "clause": "Annex_L",
-      "description": "L (List) struct element must not contain content item kid directly \u2014 must use L > LI > LBody > [MCID]",
+      "description": "L (List) struct element must not contain content item kid directly — must use L > LI > LBody > [MCID]",
       "manual": false,
       "strategies": [
         {
@@ -876,7 +940,9 @@
           "known_failure_modes": [],
           "confidence": "CONFIRMED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     },
     "WCAG-2-2-Machine/1.1.1": {
       "clause": "1.1.1",
@@ -896,13 +962,17 @@
           "known_failure_modes": [],
           "confidence": "EXPECTED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": true
     },
     "WCAG-2-2-Machine/1.4.3": {
       "clause": "1.4.3",
       "description": "Text contrast ratio below 4.5:1 (WCAG AA minimum)",
       "manual": true,
-      "strategies": []
+      "strategies": [],
+      "resolvability": "detector_mislabeled",
+      "emits_review_artifact": false
     },
     "table_semantics/untagged_tables": {
       "clause": "untagged_tables",
@@ -930,15 +1000,17 @@
           ],
           "confidence": "CONFIRMED"
         }
-      ]
+      ],
+      "resolvability": "effective",
+      "emits_review_artifact": false
     }
   },
   "manual_escalation_triggers": [
-    "Image-only page detected \u2014 OCR required before any repair",
-    "Font not embeddable \u2014 license restriction",
-    "Encryption present \u2014 cannot modify document",
-    "Corrupt xref table \u2014 qpdf repair failed",
+    "Image-only page detected — OCR required before any repair",
+    "Font not embeddable — license restriction",
+    "Encryption present — cannot modify document",
+    "Corrupt xref table — qpdf repair failed",
     "Widget annotations require form remediation"
   ],
-  "agent_usage_instructions": "At the start of each job, after running parse_verapdf_summary.py, look up each failing rule_id in this map. For each match: (a) if manual:true and strategies is empty, emit OPENCLAW_REQUIRED with full rule context; (b) if manual:false, sort strategies by pass_rate desc / pass_count desc / doc_tag_overlap desc and try in order; (c) if all strategies fail, emit OPENCLAW_REQUIRED with full attempt history; (d) if rule_id not found at all, emit OPENCLAW_REQUIRED with unknown_rule flag so the agent researches the rule before writing. Never package a FAIL result \u2014 audit report only goes to output/{TICKET}_remediated/failed/."
+  "agent_usage_instructions": "At the start of each job, after running parse_verapdf_summary.py, look up each failing rule_id in this map. For each match: (a) if manual:true and strategies is empty, emit OPENCLAW_REQUIRED with full rule context; (b) if manual:false, sort strategies by pass_rate desc / pass_count desc / doc_tag_overlap desc and try in order; (c) if all strategies fail, emit OPENCLAW_REQUIRED with full attempt history; (d) if rule_id not found at all, emit OPENCLAW_REQUIRED with unknown_rule flag so the agent researches the rule before writing. Never package a FAIL result — audit report only goes to output/{TICKET}_remediated/failed/."
 }
