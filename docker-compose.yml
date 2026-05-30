@@ -25,11 +25,13 @@ services:
       #   chmod +x tools/audit/my_new_script.sh
       - ./tools:/app/tools
       - ./skills:/app/skills
+      - ./docs:/app/docs
       - ./AGENTS.md:/app/AGENTS.md
+      - ./AGENTS_GENERAL.md:/app/AGENTS_GENERAL.md
+      - ./openclaw.json:/app/openclaw.json
       - ./SOUL.md:/app/SOUL.md
       - ./IDENTITY.md:/app/IDENTITY.md
       - ./TOOLS.md:/app/TOOLS.md
-
     stdin_open: true
     tty: true
 

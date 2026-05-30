@@ -45,18 +45,78 @@ When you finish a task, surface the container path to the deliverable in your re
 
 ## External services
 
-- Model provider: PRIMARY_MODEL and VISION_MODEL are configured via env vars in `.env`. The provider is agnostic — the container talks to whichever endpoint the env vars point to.
+- Model provider: PRIMARY_MODEL, VISION_MODEL, and CODING_MODEL are configured
+  via env vars in `.env`. The provider is agnostic — the container talks to
+  whichever endpoint the env vars point to.
 - veraPDF, qpdf, ocrmypdf: installed in the container
 
 Use these only if the task requires them.
 
+## Model routing
+
+| Task | Model |
+|------|-------|
+| General reasoning, analysis, decisions | PRIMARY_MODEL |
+| Visual inspection, image analysis | VISION_MODEL |
+| Writing, editing, or testing code | CODING_MODEL |
+
+Switch to CODING_MODEL when the task involves writing or modifying Python scripts,
+shell scripts, or JSON configuration files. Switch back to PRIMARY_MODEL for
+reasoning, planning, or gate-check interpretation.
+
+## Implementation tasks (TASK_TYPE: IMPLEMENTATION)
+
+When the operator's message includes `TASK_TYPE: IMPLEMENTATION`, the task
+involves writing or modifying pipeline code. Follow this procedure:
+
+1. **Read the template first.** The operator will reference a specific template
+   in `docs/OPENCLAW_PROMPT_TEMPLATES.md`. Read that section in full before
+   writing any code.
+
+2. **Read the reference documents.** The following documents in `docs/` define
+   all locked architectural decisions. Do not deviate from them:
+   - `docs/ORCHESTRATOR_REVIEW.md` — known bugs, milestone plan, file inventory
+   - `docs/RESIDUAL_AND_CAPTURE_CONTRACT.md` — the capture/index architecture,
+     all data contracts, all resolved decisions
+
+3. **Confirm the prerequisite gate.** Each template specifies a prerequisite
+   (a prior template whose gate must have passed). Confirm this before starting.
+   If the prerequisite gate output is not provided, ask for it.
+
+4. **Read the current file(s) fresh from disk** before writing any changes.
+   Never rely on memory of a file's contents. Always read, then write.
+
+5. **Switch to CODING_MODEL** for the implementation itself.
+
+6. **Run every gate check** listed in the template's GATE section.
+   - Run them in order.
+   - Paste the output of each check before marking it passed.
+   - If a check fails, iterate on the code and re-run — do not move on with
+     a failing gate.
+   - The MM-TEST2 regression check applies to every template. Always run it last.
+
+7. **Do not exceed the template's scope.** Each template has a "do not"
+   section or equivalent scope constraint. Honour it precisely. Changes to
+   `remediate.py` in particular are milestone-sequenced — do not anticipate
+   changes that belong to a later template.
+
+8. **Commit on gate pass.** When all gates pass, commit the changed files to
+   master with a message in the form:
+   `[Template X-Y] <one-line description of what changed>`
+
+9. **Report completion.** Paste the final gate output and the commit hash.
+   Do not summarize what you did — paste the evidence.
+
 ## What you do NOT do under this document
 
-- Do not invoke `remediate.py`
+- Do not invoke `remediate.py` as part of an IMPLEMENTATION task (only as a
+  gate check when the template specifies it)
 - Do not look for OPENCLAW_REQUIRED signals — those are remediation-specific
-- Do not write to `jobs/` or `output/{TICKET}_remediated/` paths — those are remediation-specific
+- Do not write to `jobs/` or `output/{TICKET}_remediated/` paths — those are
+  remediation-specific
 - Do not generate STATUS.json — that's remediation-specific
-- Do not require an approved alt map, doc taxonomy classification, or rule map lookup — those are remediation-specific
+- Do not require an approved alt map, doc taxonomy classification, or rule map
+  lookup — those are remediation-specific
 
 ## What you DO under this document
 

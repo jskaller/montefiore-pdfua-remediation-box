@@ -19,15 +19,18 @@
     "defaults": {
       "workspace": "/app",
       "model": {
-        "primary": "primary_provider/${PRIMARY_MODEL}",
+        "primary": "nim/${PRIMARY_MODEL}",
         "fallbacks": []
       },
       "models": {
-        "primary_provider/${PRIMARY_MODEL}": {
+        "nim/${PRIMARY_MODEL}": {
           "alias": "primary"
         },
-        "vision_provider/${VISION_MODEL}": {
+        "nim/${VISION_MODEL}": {
           "alias": "vision"
+        },
+        "nim/${CODING_MODEL}": {
+          "alias": "coding"
         }
       }
     }
@@ -35,27 +38,59 @@
   "models": {
     "mode": "merge",
     "providers": {
-      "primary_provider": {
+      "nim": {
         "baseUrl": "${PRIMARY_PROVIDER_BASE_URL}",
         "apiKey": "${PRIMARY_PROVIDER_API_KEY}",
         "api": "openai-completions",
         "models": [
           {
             "id": "${PRIMARY_MODEL}",
-            "name": "Primary Model",
-            "input": ["text"]
-          }
-        ]
-      },
-      "vision_provider": {
-        "baseUrl": "${VISION_PROVIDER_BASE_URL}",
-        "apiKey": "${VISION_PROVIDER_API_KEY}",
-        "api": "openai-completions",
-        "models": [
+            "name": "Step 3.5 Flash",
+            "reasoning": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 256000,
+            "maxTokens": 8192
+          },
           {
             "id": "${VISION_MODEL}",
-            "name": "Vision Model",
-            "input": ["text", "image"]
+            "name": "Nemotron Vision",
+            "reasoning": true,
+            "input": [
+              "text",
+              "image"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 131072,
+            "maxTokens": 4096
+          },
+          {
+            "id": "${CODING_MODEL}",
+            "name": "DeepSeek V4 Pro",
+            "reasoning": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 131072,
+            "maxTokens": 8192
           }
         ]
       }
