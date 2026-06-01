@@ -1,0 +1,317 @@
+# Project Sitemap
+
+Repo: jskaller/montefiore-pdfua-remediation-box
+Branch: master
+Generated: 2026-06-01T17:33:40Z
+
+## Git status
+
+```text
+ M .DS_Store
+ M openclaw.json
+?? .openclaw/
+?? PROJECT_SITEMAP_WITH_RAW_URLS.md
+```
+
+## Files
+
+- `.DS_Store`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/.DS_Store
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/.DS_Store
+- `.env.example`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/.env.example
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/.env.example
+- `.gitignore`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/.gitignore
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/.gitignore
+- `AGENTS_GENERAL.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/AGENTS_GENERAL.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/AGENTS_GENERAL.md
+- `AGENTS.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/AGENTS.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/AGENTS.md
+- `CONTRIBUTING.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/CONTRIBUTING.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/CONTRIBUTING.md
+- `docker-compose.yml`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/docker-compose.yml
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/docker-compose.yml
+- `docker-init.sh`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/docker-init.sh
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/docker-init.sh
+- `Dockerfile`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/Dockerfile
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/Dockerfile
+- `docs/OPENCLAW_PROMPT_TEMPLATES.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/docs/OPENCLAW_PROMPT_TEMPLATES.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/docs/OPENCLAW_PROMPT_TEMPLATES.md
+- `docs/ORCHESTRATOR_REVIEW.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/docs/ORCHESTRATOR_REVIEW.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/docs/ORCHESTRATOR_REVIEW.md
+- `docs/RESIDUAL_AND_CAPTURE_CONTRACT.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/docs/RESIDUAL_AND_CAPTURE_CONTRACT.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/docs/RESIDUAL_AND_CAPTURE_CONTRACT.md
+- `IDENTITY.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/IDENTITY.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/IDENTITY.md
+- `MANIFEST.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/MANIFEST.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/MANIFEST.md
+- `openclaw.json`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/openclaw.json
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/openclaw.json
+- `requirements.txt`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/requirements.txt
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/requirements.txt
+- `skills/montefiore-pdfua-unified-v6/checklists/DIAGNOSTIC_ONLY_PACKAGE_CHECKLIST.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/checklists/DIAGNOSTIC_ONLY_PACKAGE_CHECKLIST.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/checklists/DIAGNOSTIC_ONLY_PACKAGE_CHECKLIST.md
+- `skills/montefiore-pdfua-unified-v6/checklists/PRE_HANDOFF_CHECKLIST.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/checklists/PRE_HANDOFF_CHECKLIST.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/checklists/PRE_HANDOFF_CHECKLIST.md
+- `skills/montefiore-pdfua-unified-v6/checklists/TARGETED_FIX_CHECKLIST.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/checklists/TARGETED_FIX_CHECKLIST.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/checklists/TARGETED_FIX_CHECKLIST.md
+- `skills/montefiore-pdfua-unified-v6/docs/HANDOFF_TEMPLATE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/docs/HANDOFF_TEMPLATE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/docs/HANDOFF_TEMPLATE.md
+- `skills/montefiore-pdfua-unified-v6/docs/ORIGINAL_CONTINUATION_PROMPT_REFERENCE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/docs/ORIGINAL_CONTINUATION_PROMPT_REFERENCE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/docs/ORIGINAL_CONTINUATION_PROMPT_REFERENCE.md
+- `skills/montefiore-pdfua-unified-v6/docs/RUNBOOK.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/docs/RUNBOOK.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/docs/RUNBOOK.md
+- `skills/montefiore-pdfua-unified-v6/docs/STATUS_LANGUAGE_GUIDE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/docs/STATUS_LANGUAGE_GUIDE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/docs/STATUS_LANGUAGE_GUIDE.md
+- `skills/montefiore-pdfua-unified-v6/prompts/DEFAULT_PROJECT_BEHAVIOR.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/prompts/DEFAULT_PROJECT_BEHAVIOR.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/prompts/DEFAULT_PROJECT_BEHAVIOR.md
+- `skills/montefiore-pdfua-unified-v6/prompts/START_NEW_CONTEXT_PROMPT.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/prompts/START_NEW_CONTEXT_PROMPT.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/prompts/START_NEW_CONTEXT_PROMPT.md
+- `skills/montefiore-pdfua-unified-v6/rules/ALT_TEXT_RULE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/ALT_TEXT_RULE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/ALT_TEXT_RULE.md
+- `skills/montefiore-pdfua-unified-v6/rules/CONTRAST_REMEDIATION_REPORTING_RULE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/CONTRAST_REMEDIATION_REPORTING_RULE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/CONTRAST_REMEDIATION_REPORTING_RULE.md
+- `skills/montefiore-pdfua-unified-v6/rules/DEPENDENCY_RESOLUTION_RULE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/DEPENDENCY_RESOLUTION_RULE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/DEPENDENCY_RESOLUTION_RULE.md
+- `skills/montefiore-pdfua-unified-v6/rules/FONT_POLICY_EXPECTED_OPEN_FONTS_AND_GEOMETRY.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/FONT_POLICY_EXPECTED_OPEN_FONTS_AND_GEOMETRY.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/FONT_POLICY_EXPECTED_OPEN_FONTS_AND_GEOMETRY.md
+- `skills/montefiore-pdfua-unified-v6/rules/FONT_REPLACEMENT_REPORTING_RULE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/FONT_REPLACEMENT_REPORTING_RULE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/FONT_REPLACEMENT_REPORTING_RULE.md
+- `skills/montefiore-pdfua-unified-v6/rules/METADATA_RULESET_RECAP.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/METADATA_RULESET_RECAP.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/METADATA_RULESET_RECAP.md
+- `skills/montefiore-pdfua-unified-v6/rules/METADATA_XMP_PARITY_HARD_GATE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/METADATA_XMP_PARITY_HARD_GATE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/METADATA_XMP_PARITY_HARD_GATE.md
+- `skills/montefiore-pdfua-unified-v6/rules/NON_NEGOTIABLE_LOCAL_GATES.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/NON_NEGOTIABLE_LOCAL_GATES.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/NON_NEGOTIABLE_LOCAL_GATES.md
+- `skills/montefiore-pdfua-unified-v6/rules/OCR_REMEDIATION_RULE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/OCR_REMEDIATION_RULE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/OCR_REMEDIATION_RULE.md
+- `skills/montefiore-pdfua-unified-v6/rules/PDFPLUMBER_USAGE_RULE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/PDFPLUMBER_USAGE_RULE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/PDFPLUMBER_USAGE_RULE.md
+- `skills/montefiore-pdfua-unified-v6/rules/PIKEPDF_USAGE_RULE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/PIKEPDF_USAGE_RULE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/PIKEPDF_USAGE_RULE.md
+- `skills/montefiore-pdfua-unified-v6/rules/PYPDF_FALLBACK_RULE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/PYPDF_FALLBACK_RULE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/PYPDF_FALLBACK_RULE.md
+- `skills/montefiore-pdfua-unified-v6/rules/REFERENCE_SCOPE_RULE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/REFERENCE_SCOPE_RULE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/REFERENCE_SCOPE_RULE.md
+- `skills/montefiore-pdfua-unified-v6/rules/TABLE_SEMANTICS_RULE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/TABLE_SEMANTICS_RULE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/TABLE_SEMANTICS_RULE.md
+- `skills/montefiore-pdfua-unified-v6/rules/V5_EXTERNAL_STATUS_RULE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/V5_EXTERNAL_STATUS_RULE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/V5_EXTERNAL_STATUS_RULE.md
+- `skills/montefiore-pdfua-unified-v6/rules/V5_HARD_MULTIPASS_GATE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/V5_HARD_MULTIPASS_GATE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/V5_HARD_MULTIPASS_GATE.md
+- `skills/montefiore-pdfua-unified-v6/rules/V5_VERAPDF_PROFILE_SELECTION.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/V5_VERAPDF_PROFILE_SELECTION.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/V5_VERAPDF_PROFILE_SELECTION.md
+- `skills/montefiore-pdfua-unified-v6/rules/V6_CONTROLLING_RULESET.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/V6_CONTROLLING_RULESET.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/V6_CONTROLLING_RULESET.md
+- `skills/montefiore-pdfua-unified-v6/rules/VISUAL_QA_RULE.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/rules/VISUAL_QA_RULE.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/rules/VISUAL_QA_RULE.md
+- `skills/montefiore-pdfua-unified-v6/SKILL.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/skills/montefiore-pdfua-unified-v6/SKILL.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/skills/montefiore-pdfua-unified-v6/SKILL.md
+- `smoke_test.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/smoke_test.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/smoke_test.py
+- `SOUL.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/SOUL.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/SOUL.md
+- `TOOLS.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/TOOLS.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/TOOLS.md
+- `tools/audit/contrast_audit.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/audit/contrast_audit.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/audit/contrast_audit.py
+- `tools/audit/detect_image_only_pages.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/audit/detect_image_only_pages.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/audit/detect_image_only_pages.py
+- `tools/audit/doc_taxonomy.json`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/audit/doc_taxonomy.json
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/audit/doc_taxonomy.json
+- `tools/audit/font_geometry_matcher.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/audit/font_geometry_matcher.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/audit/font_geometry_matcher.py
+- `tools/audit/font_inventory.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/audit/font_inventory.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/audit/font_inventory.py
+- `tools/audit/lookup_repair_plan.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/audit/lookup_repair_plan.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/audit/lookup_repair_plan.py
+- `tools/audit/metadata_xmp_parity_audit.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/audit/metadata_xmp_parity_audit.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/audit/metadata_xmp_parity_audit.py
+- `tools/audit/parse_verapdf_summary.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/audit/parse_verapdf_summary.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/audit/parse_verapdf_summary.py
+- `tools/audit/post_job_indexer.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/audit/post_job_indexer.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/audit/post_job_indexer.py
+- `tools/audit/rule_repair_map.json`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/audit/rule_repair_map.json
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/audit/rule_repair_map.json
+- `tools/audit/run_qpdf_check.sh`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/audit/run_qpdf_check.sh
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/audit/run_qpdf_check.sh
+- `tools/audit/run_verapdf_profiles.sh`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/audit/run_verapdf_profiles.sh
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/audit/run_verapdf_profiles.sh
+- `tools/audit/table_semantics_audit.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/audit/table_semantics_audit.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/audit/table_semantics_audit.py
+- `tools/orchestrate/fix_metadata_xmp_parity.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/orchestrate/fix_metadata_xmp_parity.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/orchestrate/fix_metadata_xmp_parity.py
+- `tools/orchestrate/remediate.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/orchestrate/remediate.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/orchestrate/remediate.py
+- `tools/packaging/checksums.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/packaging/checksums.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/packaging/checksums.py
+- `tools/packaging/cleanup_job.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/packaging/cleanup_job.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/packaging/cleanup_job.py
+- `tools/packaging/package_deliverables.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/packaging/package_deliverables.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/packaging/package_deliverables.py
+- `tools/packaging/package_scaffold.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/packaging/package_scaffold.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/packaging/package_scaffold.py
+- `tools/packaging/status_json_writer.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/packaging/status_json_writer.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/packaging/status_json_writer.py
+- `tools/qa/preservation_audit.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/qa/preservation_audit.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/qa/preservation_audit.py
+- `tools/qa/render_compare.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/qa/render_compare.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/qa/render_compare.py
+- `tools/qa/visual_qa.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/qa/visual_qa.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/qa/visual_qa.py
+- `tools/README.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/README.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/README.md
+- `tools/repair/fix_cidset.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/fix_cidset.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/fix_cidset.py
+- `tools/repair/fix_contrast_color_runs.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/fix_contrast_color_runs.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/fix_contrast_color_runs.py
+- `tools/repair/fix_figure_alt_text.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/fix_figure_alt_text.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/fix_figure_alt_text.py
+- `tools/repair/fix_link_annotation_descriptions.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/fix_link_annotation_descriptions.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/fix_link_annotation_descriptions.py
+- `tools/repair/fix_list_numbering.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/fix_list_numbering.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/fix_list_numbering.py
+- `tools/repair/fix_metadata_xmp_parity.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/fix_metadata_xmp_parity.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/fix_metadata_xmp_parity.py
+- `tools/repair/fix_notdef_glyphs.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/fix_notdef_glyphs.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/fix_notdef_glyphs.py
+- `tools/repair/fix_parent_tree_mcids.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/fix_parent_tree_mcids.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/fix_parent_tree_mcids.py
+- `tools/repair/fix_pdfua_identifier.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/fix_pdfua_identifier.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/fix_pdfua_identifier.py
+- `tools/repair/fix_struct_content_marking.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/fix_struct_content_marking.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/fix_struct_content_marking.py
+- `tools/repair/fix_table_headers.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/fix_table_headers.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/fix_table_headers.py
+- `tools/repair/fix_table_tagging.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/fix_table_tagging.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/fix_table_tagging.py
+- `tools/repair/fix_untagged_pdf.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/fix_untagged_pdf.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/fix_untagged_pdf.py
+- `tools/repair/font_replacement_report.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/font_replacement_report.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/font_replacement_report.py
+- `tools/repair/generate_alt_text_drafts.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/generate_alt_text_drafts.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/generate_alt_text_drafts.py
+- `tools/repair/generate_alt_text_review_report.py`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/generate_alt_text_review_report.py
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/generate_alt_text_review_report.py
+- `tools/repair/README.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/tools/repair/README.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/tools/repair/README.md
+- `verapdf-greenfield-install-response.xml`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/verapdf-greenfield-install-response.xml
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/verapdf-greenfield-install-response.xml
+- `verapdf-install-response.xml`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/verapdf-install-response.xml
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/verapdf-install-response.xml
+- `WORKFLOW.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/WORKFLOW.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/WORKFLOW.md
+- `workspace/alt_map_approved.json`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/workspace/alt_map_approved.json
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/workspace/alt_map_approved.json
+- `workspace/archive/.gitkeep`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/workspace/archive/.gitkeep
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/workspace/archive/.gitkeep
+- `workspace/assets/validation_profiles/.gitkeep`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/workspace/assets/validation_profiles/.gitkeep
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/workspace/assets/validation_profiles/.gitkeep
+- `workspace/input/.gitkeep`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/workspace/input/.gitkeep
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/workspace/input/.gitkeep
+- `workspace/jobs/.gitkeep`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/workspace/jobs/.gitkeep
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/workspace/jobs/.gitkeep
+- `workspace/output/.gitkeep`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/workspace/output/.gitkeep
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/workspace/output/.gitkeep
+- `workspace/templates/.gitkeep`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/workspace/templates/.gitkeep
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/workspace/templates/.gitkeep
+- `workspace/USER.md`
+  - blob: https://github.com/jskaller/montefiore-pdfua-remediation-box/blob/master/workspace/USER.md
+  - raw: https://raw.githubusercontent.com/jskaller/montefiore-pdfua-remediation-box/master/workspace/USER.md
